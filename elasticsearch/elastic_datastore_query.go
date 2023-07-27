@@ -1,10 +1,15 @@
 package elasticsearch
 
 import (
+	"context"
+	"encoding/json"
 	"fmt"
+	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
+	"io"
 	"strings"
 	"time"
 
+	"github.com/elastic/go-elasticsearch/v8/typedapi/core/search"
 	. "github.com/go-yaaf/yaaf-common/database"
 	. "github.com/go-yaaf/yaaf-common/entity"
 	"github.com/go-yaaf/yaaf-common/utils"
@@ -13,7 +18,7 @@ import (
 // region queryBuilder internal structure ------------------------------------------------------------------------------
 
 type elasticDatastoreQuery struct {
-	db         *ElasticStore
+	dbs        *ElasticStore
 	factory    EntityFactory
 	allFilters [][]QueryFilter
 	anyFilters [][]QueryFilter
@@ -22,6 +27,7 @@ type elasticDatastoreQuery struct {
 	callbacks  []func(in Entity) Entity
 	page       int
 	limit      int
+	lastQuery  string
 }
 
 // endregion
@@ -65,7 +71,7 @@ func (s *elasticDatastoreQuery) MatchAny(filters ...QueryFilter) IQuery {
 			list = append(list, filter)
 		}
 	}
-	s.anyFilters = append(s.allFilters, list)
+	s.anyFilters = append(s.anyFilters, list)
 	return s
 }
 
@@ -105,7 +111,7 @@ func (s *elasticDatastoreQuery) Page(page int) IQuery {
 // List Execute a query to get list of entities by IDs (the criteria is ignored)
 func (s *elasticDatastoreQuery) List(entityIDs []string, keys ...string) (out []Entity, err error) {
 
-	result, err := s.db.List(s.factory, entityIDs, keys...)
+	result, err := s.dbs.List(s.factory, entityIDs, keys...)
 	if err != nil {
 		return nil, err
 	}
@@ -122,22 +128,151 @@ func (s *elasticDatastoreQuery) List(entityIDs []string, keys ...string) (out []
 
 // Find Execute query based on the criteria, order and pagination
 // On each record, after the marshaling the result shall be transformed via the query callback chain
-func (s *elasticDatastoreQuery) Find(keys ...string) (out []Entity, total int64, err error) {
+func (s *elasticDatastoreQuery) Find(keys ...string) ([]Entity, int64, error) {
 
-	//ent := s.factory()
-	//index := indexName(ent.TABLE(), keys...)
-	return nil, 0, fmt.Errorf(NOT_IMPLEMENTED)
+	query, err := s.buildQuery()
+	if err != nil {
+		return nil, 0, err
+	}
+	sort := s.buildSort()
+
+	pattern := indexPattern(s.factory, keys...)
+	size := s.limit
+	from := s.page
+
+	req := &search.Request{Size: &size, From: &from, Query: query}
+
+	searchObject := s.dbs.tClient.Search().Index(pattern).
+		ExpandWildcards("all").
+		TrackTotalHits("1000000").
+		Sort(sort).
+		Request(req)
+
+	// Log before executing the request
+	s.logLastQuery(searchObject)
+	res, err := searchObject.Do(context.Background())
+	if err != nil {
+		return nil, 0, err
+	}
+
+	result := make([]Entity, 0)
+	for _, hit := range res.Hits.Hits {
+		entity := s.factory()
+		if jer := json.Unmarshal(hit.Source_, &entity); jer == nil {
+			transformed := s.processCallbacks(entity)
+			if transformed != nil {
+				result = append(result, transformed)
+			}
+		}
+	}
+
+	return result, res.Hits.Total.Value, nil
 }
 
 // Select is similar to find but with ability to retrieve specific fields
 func (s *elasticDatastoreQuery) Select(fields ...string) ([]Json, error) {
-	return nil, fmt.Errorf(NOT_IMPLEMENTED)
+	entities, _, err := s.Find()
+	if err != nil {
+		return nil, err
+	}
+
+	filterFields := func(in Json) Json {
+		if len(fields) == 0 {
+			return in
+		}
+		out := Json{}
+		for _, f := range fields {
+			if v, ok := in[f]; ok {
+				out[f] = v
+			}
+		}
+		return out
+	}
+
+	result := make([]Json, 0)
+	for _, ent := range entities {
+		if data, jer := json.Marshal(ent); jer != nil {
+			return nil, jer
+		} else {
+			j := Json{}
+			if er := json.Unmarshal(data, &j); er != nil {
+				return nil, er
+			} else {
+				obj := filterFields(j)
+				result = append(result, obj)
+			}
+		}
+	}
+
+	return result, nil
 }
 
 // Count executes a query based on the criteria, order and pagination
 // Returns only the count of matching rows
-func (s *elasticDatastoreQuery) Count(keys ...string) (total int64, err error) {
-	return 0, fmt.Errorf(NOT_IMPLEMENTED)
+func (s *elasticDatastoreQuery) Count(keys ...string) (int64, error) {
+
+	query, err := s.buildQuery()
+	if err != nil {
+		return 0, err
+	}
+
+	// agsMap2 := make(map[string]types.Aggregations)
+
+	card := types.NewCardinalityAggregation()
+	field := "id_"
+	pre := 40000
+	card.Field = &field
+	card.PrecisionThreshold = &pre
+
+	ags := types.Aggregations{
+		Cardinality: card,
+		Filter:      nil,
+		Filters:     nil,
+	}
+
+	agsMap := map[string]types.Aggregations{"count": ags}
+
+	pattern := indexPattern(s.factory, keys...)
+	size := 0
+
+	req := &search.Request{Size: &size, Query: query, Aggregations: agsMap}
+
+	searchObject := s.dbs.tClient.Search().Index(pattern).
+		ExpandWildcards("all").
+		TrackTotalHits("1000000").
+		Request(req)
+
+	res, err := searchObject.Do(context.Background())
+	if err != nil {
+		return 0, err
+	}
+	return res.Hits.Total.Value, nil
+}
+
+// Count2 executes a query based on the criteria, order and pagination
+// Returns only the count of matching rows
+func (s *elasticDatastoreQuery) Count2(keys ...string) (int64, error) {
+
+	query, err := s.buildQuery()
+	if err != nil {
+		return 0, err
+	}
+
+	pattern := indexPattern(s.factory, keys...)
+	size := 1
+
+	req := &search.Request{Size: &size, Query: query}
+
+	searchObject := s.dbs.tClient.Search().Index(pattern).
+		ExpandWildcards("all").
+		TrackTotalHits("1000000").
+		Request(req)
+
+	res, err := searchObject.Do(context.Background())
+	if err != nil {
+		return 0, err
+	}
+	return res.Hits.Total.Value, nil
 }
 
 // Aggregation Execute the query based on the criteria, order and pagination and return the provided aggregation function on the field
@@ -222,7 +357,7 @@ func (s *elasticDatastoreQuery) Delete(keys ...string) (total int64, err error) 
 		}
 	}
 
-	if affected, fe := s.db.BulkDelete(s.factory, deleteIds, keys...); fe != nil {
+	if affected, fe := s.dbs.BulkDelete(s.factory, deleteIds, keys...); fe != nil {
 		return 0, fe
 	} else {
 		return affected, nil
@@ -261,7 +396,7 @@ func (s *elasticDatastoreQuery) SetFields(fields map[string]any, keys ...string)
 		}
 	}
 
-	if result, err := s.db.BulkUpdate(changeList); fe != nil {
+	if result, err := s.dbs.BulkUpdate(changeList); fe != nil {
 		return 0, err
 	} else {
 		return result, nil
@@ -297,12 +432,23 @@ func (s *elasticDatastoreQuery) processCallbacks(in Entity) (out Entity) {
 
 // ToString Get the string representation of the query
 func (s *elasticDatastoreQuery) ToString() string {
-	// Create Json representing the internal builder
-	if bytes, err := Marshal(s); err != nil {
-		return err.Error()
-	} else {
-		return string(bytes)
+	return s.lastQuery
+}
+
+func (s *elasticDatastoreQuery) String() string {
+	return s.lastQuery
+}
+
+// Log the last query
+func (s *elasticDatastoreQuery) logLastQuery(so *search.Search) {
+	req, err := so.HttpRequest(context.Background())
+	if err != nil {
+		return
 	}
+	body, err := io.ReadAll(req.Body)
+	s.lastQuery = string(body)
+	s.dbs.lastQuery = s.lastQuery
+	_ = req.Body.Close()
 }
 
 // endregion

@@ -7,14 +7,12 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
 	elastic "github.com/elastic/go-elasticsearch/v8"
-	_ "github.com/elastic/go-elasticsearch/v8/esapi"
-	_ "github.com/elastic/go-elasticsearch/v8/esutil"
-
 	"github.com/elastic/go-elasticsearch/v8/typedapi/core/search"
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
 
@@ -31,10 +29,11 @@ const (
 // region Elastic store definitions ------------------------------------------------------------------------------------
 
 type ElasticStore struct {
-	tClient  *elastic.TypedClient // Typed Client
-	esClient *elastic.Client      // Low level tClient (for bulk operations)
-	url      string
-	URI      string
+	tClient   *elastic.TypedClient // Typed Client
+	esClient  *elastic.Client      // Low level tClient (for bulk operations)
+	url       string
+	URI       string
+	lastQuery string
 }
 
 // Resolve index pattern from entity class name
@@ -355,18 +354,22 @@ func (dbs *ElasticStore) SetFields(factory EntityFactory, entityID string, field
 
 // Query is a factory method for query builder Utility
 func (dbs *ElasticStore) Query(factory EntityFactory) IQuery {
-	//return &elasticDatastoreQuery{
-	//	db:         dbs,
-	//	factory:    factory,
-	//	allFilters: make([][]QueryFilter, 0),
-	//	anyFilters: make([][]QueryFilter, 0),
-	//	ascOrders:  make([]any, 0),
-	//	descOrders: make([]any, 0),
-	//	callbacks:  make([]func(in Entity) Entity, 0),
-	//	limit:      100,
-	//	page:       0,
-	//}
-	return nil
+	return &elasticDatastoreQuery{
+		dbs:        dbs,
+		factory:    factory,
+		allFilters: make([][]QueryFilter, 0),
+		anyFilters: make([][]QueryFilter, 0),
+		ascOrders:  make([]any, 0),
+		descOrders: make([]any, 0),
+		callbacks:  make([]func(in Entity) Entity, 0),
+		limit:      100,
+		page:       0,
+	}
+}
+
+// String returns the last query DSL
+func (dbs *ElasticStore) String() string {
+	return dbs.lastQuery
 }
 
 // endregion
@@ -396,6 +399,27 @@ func (dbs *ElasticStore) CreateIndex(indexName string) (string, error) {
 func (dbs *ElasticStore) CreateEntityIndex(factory EntityFactory, key string) (string, error) {
 	idxName := indexName(factory().TABLE(), key)
 	return dbs.CreateIndex(idxName)
+}
+
+// ListIndices returns a list of all indices matching the pattern
+func (dbs *ElasticStore) ListIndices(pattern string) (map[string]int, error) {
+
+	resp, err := dbs.tClient.Cat.Indices().Do(context.Background())
+	if err != nil {
+		return nil, err
+	}
+	result := make(map[string]int)
+	for _, idx := range resp {
+		index := *idx.Index
+		if utils.StringUtils().WildCardMatch(index, pattern) {
+			if count, er := strconv.Atoi(idx.DocsCount); er != nil {
+				result[index] = 0
+			} else {
+				result[index] = count
+			}
+		}
+	}
+	return result, nil
 }
 
 // DropIndex drops an index

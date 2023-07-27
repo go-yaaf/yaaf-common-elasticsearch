@@ -2,6 +2,7 @@
 package test
 
 import (
+	"encoding/json"
 	"fmt"
 	. "github.com/go-yaaf/yaaf-common/entity"
 )
@@ -18,9 +19,17 @@ type Hero struct {
 	Brain    float64 `json:"brain"`    // Strength (1..100)
 }
 
-func (a Hero) TABLE() string { return "hero-{{accountId}}-{{year}}.{{month}}" }
-func (a Hero) NAME() string  { return a.Name }
-func (a Hero) KEY() string   { return a.Key }
+func (a *Hero) TABLE() string { return "hero-{{accountId}}-{{year}}.{{month}}" }
+func (a *Hero) NAME() string  { return a.Name }
+func (a *Hero) KEY() string   { return a.Key }
+
+func (a *Hero) String() string {
+	if bytes, err := json.Marshal(a); err != nil {
+		return err.Error()
+	} else {
+		return string(bytes)
+	}
+}
 
 func NewHero() Entity {
 	return &Hero{}
@@ -39,9 +48,9 @@ func NewHero1(id string, num int, name, typ, color string) Entity {
 func GetRandomListOfHeroes(size int) []Entity {
 	result := make([]Entity, 0)
 
-	for i := 0; i < size; i++ {
+	for i := 1; i <= size; i++ {
 		hero := NewHero()
-		hero.(*Hero).Id = NanoID()
+		hero.(*Hero).Id = fmt.Sprintf("%d", i)
 		hero.(*Hero).Key = keys[rnd.Intn(len(keys))]
 		hero.(*Hero).Num = 10*i + rnd.Intn(8)
 		hero.(*Hero).Name = getRandomName()
