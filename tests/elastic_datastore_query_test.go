@@ -70,9 +70,16 @@ func (s *DatastoreQueryTestSuite) removeAllIndices() {
 
 func (s *DatastoreQueryTestSuite) TestQuery() {
 
+	s.createEntityIndex()
 	//s.listDocuments()
 	//s.findDocuments()
-	s.selectDocuments()
+	//s.selectDocuments()
+}
+
+func (s *DatastoreQueryTestSuite) createEntityIndex() {
+	idxName, err := s.sut.CreateEntityIndex(NewHero, "disney")
+	require.NoError(s.T(), err)
+	fmt.Println(idxName)
 }
 
 func (s *DatastoreQueryTestSuite) listDocuments() {

@@ -397,7 +397,27 @@ func (dbs *ElasticStore) CreateIndex(indexName string) (string, error) {
 
 // CreateEntityIndex creates an index of entity and add entity field mapping
 func (dbs *ElasticStore) CreateEntityIndex(factory EntityFactory, key string) (string, error) {
-	idxName := indexName(factory().TABLE(), key)
+	idxName := factory().TABLE()
+
+	// Create index template
+	indexTemplate, err := dbs.createEntityIndexTemplate(factory)
+	if err != nil {
+		return "", err
+	}
+	tmplName := idxName
+	if strings.Contains(tmplName, "{{") {
+		idx := strings.Index(tmplName, "{{")
+		tmplName = fmt.Sprintf("%s", tmplName[:idx])
+	}
+
+	res, er := dbs.tClient.Indices.PutIndexTemplate(tmplName).Raw(strings.NewReader(indexTemplate)).Do(context.Background())
+	if er != nil {
+		return "", er
+	}
+	logger.Info("Ack: %v", res.Acknowledged)
+
+	// Create index
+	idxName = indexName(idxName, key)
 	return dbs.CreateIndex(idxName)
 }
 
