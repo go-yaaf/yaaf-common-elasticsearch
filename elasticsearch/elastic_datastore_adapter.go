@@ -247,7 +247,7 @@ func (dbs *ElasticStore) List(factory EntityFactory, entityIDs []string, keys ..
 		AllowNoIndices(true).
 		Request(req).Do(context.Background())
 	if err != nil {
-		return nil, err
+		return nil, ElasticError(err)
 	}
 
 	result := make([]Entity, 0)
@@ -271,7 +271,7 @@ func (dbs *ElasticStore) Exists(factory EntityFactory, entityID string, keys ...
 func (dbs *ElasticStore) Insert(entity Entity) (Entity, error) {
 	index := indexName(entity.TABLE(), entity.KEY())
 	if _, err := dbs.tClient.Index(index).Id(entity.ID()).Request(entity).Do(context.Background()); err != nil {
-		return nil, err
+		return nil, ElasticError(err)
 	} else {
 		return entity, nil
 	}
@@ -285,7 +285,7 @@ func (dbs *ElasticStore) Update(entity Entity) (Entity, error) {
 		return nil, fmt.Errorf("document: %s does not exists in index pattern: %s", entity.ID(), pattern)
 	} else {
 		if _, er := dbs.tClient.Index(index).Id(entity.ID()).Request(entity).Do(context.Background()); er != nil {
-			return nil, er
+			return nil, ElasticError(er)
 		} else {
 			return entity, nil
 		}
@@ -303,7 +303,7 @@ func (dbs *ElasticStore) Upsert(entity Entity) (Entity, error) {
 	}
 
 	if _, err := dbs.tClient.Index(index).Id(entity.ID()).Request(entity).Do(context.Background()); err != nil {
-		return nil, err
+		return nil, ElasticError(err)
 	} else {
 		return entity, nil
 	}
@@ -399,7 +399,7 @@ func (dbs *ElasticStore) IndexExists(indexName string) bool {
 func (dbs *ElasticStore) CreateIndex(indexName string) (string, error) {
 	// Create index
 	if res, err := dbs.tClient.Indices.Create(indexName).Do(context.Background()); err != nil {
-		return "", err
+		return "", ElasticError(err)
 	} else {
 		return res.Index, nil
 	}
@@ -422,7 +422,7 @@ func (dbs *ElasticStore) CreateEntityIndex(factory EntityFactory, key string) (s
 
 	res, er := dbs.tClient.Indices.PutIndexTemplate(tmplName).Raw(strings.NewReader(indexTemplate)).Do(context.Background())
 	if er != nil {
-		return "", er
+		return "", ElasticError(er)
 	}
 	logger.Info("Ack: %v", res.Acknowledged)
 
@@ -436,7 +436,7 @@ func (dbs *ElasticStore) ListIndices(pattern string) (map[string]int, error) {
 
 	resp, err := dbs.tClient.Cat.Indices().Do(context.Background())
 	if err != nil {
-		return nil, err
+		return nil, ElasticError(err)
 	}
 	result := make(map[string]int)
 	for _, idx := range resp {
@@ -467,7 +467,7 @@ func (dbs *ElasticStore) get(pattern, entityID string) ([]byte, string, error) {
 
 	res, err := dbs.tClient.Search().Index(pattern).ExpandWildcards("all").Request(req).Do(context.Background())
 	if err != nil {
-		return nil, "", err
+		return nil, "", ElasticError(err)
 	}
 	if res.Hits.Total.Value <= 0 {
 		return nil, "", errors.New(ES_DOC_NOT_FOUND)

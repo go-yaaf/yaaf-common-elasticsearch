@@ -81,13 +81,14 @@ func (s *DatastoreQueryAggregationsTestSuite) removeAllIndices() {
 
 func (s *DatastoreQueryAggregationsTestSuite) TestQuery() {
 	//s.singleValueAggregation()
-	//s.groupAggregation()
+	s.groupCountAggregation()
+	s.groupAggregation()
 	//s.countHistogram()
 	//s.countHistogramAuto()
-	s.sumHistogram()
-	s.minHistogram()
-	s.maxHistogram()
-	s.avgHistogram()
+	//s.sumHistogram()
+	//s.minHistogram()
+	//s.maxHistogram()
+	//s.avgHistogram()
 }
 
 func (s *DatastoreQueryAggregationsTestSuite) singleValueAggregation() {
@@ -118,14 +119,36 @@ func (s *DatastoreQueryAggregationsTestSuite) singleValueAggregation() {
 
 }
 
-func (s *DatastoreQueryAggregationsTestSuite) groupAggregation() {
-	result, err := s.sut.Query(NewHero).MatchAll(F("key").Eq("a")).GroupAggregation("color", "count")
+func (s *DatastoreQueryAggregationsTestSuite) groupCountAggregation() {
+	result, total, err := s.sut.Query(NewHero).MatchAll(F("key").Eq("a")).GroupCount("color")
 	require.NoError(s.T(), err)
-	s.printGroupResult(result)
+	for k, v := range result {
+		fmt.Println(k, ": ", v)
+	}
+	fmt.Println(total)
 
-	result, err = s.sut.Query(NewHero).MatchAll(F("key").Eq("a")).GroupAggregation("num", "count")
+	result, total, err = s.sut.Query(NewHero).MatchAll(F("key").Eq("a")).GroupCount("brain")
 	require.NoError(s.T(), err)
-	s.printGroupResult(result)
+	for k, v := range result {
+		fmt.Println(k, ": ", v)
+	}
+	fmt.Println(total)
+}
+
+func (s *DatastoreQueryAggregationsTestSuite) groupAggregation() {
+	result, total, err := s.sut.Query(NewHero).MatchAll(F("key").Eq("a")).GroupAggregation("brain", "sum")
+	require.NoError(s.T(), err)
+	for k, v := range result {
+		fmt.Println(k, ": ", v)
+	}
+	fmt.Println(total)
+
+	result, total, err = s.sut.Query(NewHero).MatchAll(F("key").Eq("a")).GroupAggregation("num", "avg")
+	require.NoError(s.T(), err)
+	for k, v := range result {
+		fmt.Println(k, ": ", v)
+	}
+	fmt.Println(total)
 }
 
 func (s *DatastoreQueryAggregationsTestSuite) countHistogram() {
@@ -185,16 +208,6 @@ func (s *DatastoreQueryAggregationsTestSuite) avgHistogram() {
 		fmt.Println(k, " Avg: ", v)
 	}
 	fmt.Println("AVG total", total, "------------------------------")
-}
-
-// endregion
-
-// region Generic printing ---------------------------------------------------------------------------------------------
-
-func (s *DatastoreQueryAggregationsTestSuite) printGroupResult(res map[any]float64) {
-	for k, v := range res {
-		fmt.Println(k, ": ", v)
-	}
 }
 
 // endregion

@@ -2,7 +2,9 @@ package elasticsearch
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
+	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
 	. "github.com/go-yaaf/yaaf-common/entity"
 	"reflect"
 	"strings"
@@ -128,4 +130,19 @@ func (dbs *ElasticStore) addFieldMapping(sf reflect.StructField, props Json) {
 	}
 	name := fmt.Sprintf("%s%s", strings.ToLower(sf.Name[0:1]), sf.Name[1:])
 	props[name] = spec
+}
+
+// ElasticError is wrapper for errors returned by elasticsearch to provide meaningful error
+func ElasticError(err error) error {
+
+	if err == nil {
+		return nil
+	}
+
+	if ee, ok := err.(*types.ElasticsearchError); ok {
+		reason := ee.ErrorCause.CausedBy.Reason
+		return errors.New(*reason)
+	} else {
+		return err
+	}
 }

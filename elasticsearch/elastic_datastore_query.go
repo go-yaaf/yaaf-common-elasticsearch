@@ -150,7 +150,7 @@ func (s *elasticDatastoreQuery) Find(keys ...string) ([]Entity, int64, error) {
 	s.logLastQuery(searchObject)
 	res, err := searchObject.Do(context.Background())
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, ElasticError(err)
 	}
 
 	result := make([]Entity, 0)

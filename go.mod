@@ -5,8 +5,8 @@ go 1.20
 require (
 	github.com/cenkalti/backoff/v4 v4.2.1
 	github.com/elastic/go-elasticsearch/v8 v8.8.2
-	github.com/go-yaaf/yaaf-common v1.2.75
-	github.com/stretchr/testify v1.7.4
+	github.com/go-yaaf/yaaf-common v1.2.77
+	github.com/stretchr/testify v1.8.1
 )
 
 require (
