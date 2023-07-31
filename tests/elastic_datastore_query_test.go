@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"testing"
+	"time"
 )
 
 type DatastoreQueryTestSuite struct {
@@ -34,7 +35,8 @@ func (s *DatastoreQueryTestSuite) SetupSuite() {
 	err = s.sut.Ping(5, 2)
 	require.NoError(s.T(), err)
 
-	// s.bulkInsertDocuments()
+	//s.createEntityIndex()
+	//s.bulkInsertDocuments()
 }
 
 // TearDownSuite will be called on test suite completion
@@ -49,6 +51,9 @@ func (s *DatastoreQueryTestSuite) bulkInsertDocuments() {
 	total, err := s.sut.BulkInsert(list)
 	require.NoError(s.T(), err)
 	logger.Info("%d documents added", total)
+
+	// Wait some time for the indexing to complete
+	time.Sleep(10 * time.Second)
 }
 
 func (s *DatastoreQueryTestSuite) removeAllIndices() {
@@ -70,10 +75,12 @@ func (s *DatastoreQueryTestSuite) removeAllIndices() {
 
 func (s *DatastoreQueryTestSuite) TestQuery() {
 
-	s.createEntityIndex()
 	//s.listDocuments()
 	//s.findDocuments()
 	//s.selectDocuments()
+	//s.countDocuments()
+	//s.getDocumentsMap()
+	//s.getDocumentsIDs()
 }
 
 func (s *DatastoreQueryTestSuite) createEntityIndex() {
@@ -128,6 +135,95 @@ func (s *DatastoreQueryTestSuite) selectDocuments() {
 	require.NoError(s.T(), err)
 	for _, ent := range entities {
 		fmt.Println(ent)
+	}
+}
+
+func (s *DatastoreQueryTestSuite) countDocuments() {
+
+	total, err := s.sut.Query(NewHero).MatchAll(F("key").Eq("a")).Count()
+	require.NoError(s.T(), err)
+	fmt.Println(total, "documents in key=a")
+
+	total, err = s.sut.Query(NewHero).MatchAll(F("key").Eq("m")).Count()
+	require.NoError(s.T(), err)
+	fmt.Println(total, "documents in key=m")
+
+	total, err = s.sut.Query(NewHero).MatchAll(F("key").Eq("w")).Count()
+	require.NoError(s.T(), err)
+	fmt.Println(total, "documents in key=w")
+
+	total, err = s.sut.Query(NewHero).MatchAll(F("color").Eq("black")).Count()
+	require.NoError(s.T(), err)
+	fmt.Println(total, "documents in color=black")
+
+	total, err = s.sut.Query(NewHero).MatchAll(F("color").Eq("white")).Count()
+	require.NoError(s.T(), err)
+	fmt.Println(total, "documents in color=white")
+
+	total, err = s.sut.Query(NewHero).MatchAny(F("color").Eq("black"), F("color").Eq("white")).Count()
+	require.NoError(s.T(), err)
+	fmt.Println(total, "documents in color=black or white")
+
+	total, err = s.sut.Query(NewHero).
+		MatchAll(
+			F("key").Eq("a"),
+		).MatchAny(
+		F("color").Eq("black"),
+		F("color").Eq("white"),
+	).Count()
+
+	require.NoError(s.T(), err)
+	fmt.Println(total, "documents in key=a and color=black or white")
+
+}
+
+func (s *DatastoreQueryTestSuite) getDocumentsMap() {
+	eMap, err := s.sut.Query(NewHero).
+		MatchAny(
+			F("color").Eq("black"),
+			F("color").Eq("white"),
+		).Limit(50).GetMap()
+	require.NoError(s.T(), err)
+
+	for k, v := range eMap {
+		fmt.Println(k, ":", v.KEY(), " - ", v.NAME())
+	}
+
+	// Now with key
+	eMap, err = s.sut.Query(NewHero).
+		MatchAny(
+			F("color").Eq("black"),
+			F("color").Eq("white"),
+		).Limit(50).GetMap("w")
+	require.NoError(s.T(), err)
+
+	for k, v := range eMap {
+		fmt.Println(k, ":", v.KEY(), " - ", v.NAME())
+	}
+}
+
+func (s *DatastoreQueryTestSuite) getDocumentsIDs() {
+	list, err := s.sut.Query(NewHero).
+		MatchAny(
+			F("color").Eq("black"),
+			F("color").Eq("white"),
+		).Limit(50).GetIDs("a")
+	require.NoError(s.T(), err)
+
+	for _, v := range list {
+		fmt.Println(v)
+	}
+
+	// Now with key
+	list, err = s.sut.Query(NewHero).
+		MatchAny(
+			F("color").Eq("black"),
+			F("color").Eq("white"),
+		).Limit(50).GetIDs("m")
+	require.NoError(s.T(), err)
+
+	for _, v := range list {
+		fmt.Println(v)
 	}
 }
 

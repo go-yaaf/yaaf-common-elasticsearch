@@ -4,15 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
-	"io"
-	"strings"
-	"time"
-
 	"github.com/elastic/go-elasticsearch/v8/typedapi/core/search"
 	. "github.com/go-yaaf/yaaf-common/database"
 	. "github.com/go-yaaf/yaaf-common/entity"
 	"github.com/go-yaaf/yaaf-common/utils"
+	"io"
+	"strings"
 )
 
 // region queryBuilder internal structure ------------------------------------------------------------------------------
@@ -106,7 +103,7 @@ func (s *elasticDatastoreQuery) Page(page int) IQuery {
 
 // endregion
 
-// region QueryBuilder Execution Methods -------------------------------------------------------------------------------
+// region QueryBuilder Find Execution Methods --------------------------------------------------------------------------
 
 // List Execute a query to get list of entities by IDs (the criteria is ignored)
 func (s *elasticDatastoreQuery) List(entityIDs []string, keys ...string) (out []Entity, err error) {
@@ -144,6 +141,7 @@ func (s *elasticDatastoreQuery) Find(keys ...string) ([]Entity, int64, error) {
 
 	searchObject := s.dbs.tClient.Search().Index(pattern).
 		ExpandWildcards("all").
+		AllowNoIndices(true).
 		TrackTotalHits("1000000").
 		Sort(sort).
 		Request(req)
@@ -207,103 +205,6 @@ func (s *elasticDatastoreQuery) Select(fields ...string) ([]Json, error) {
 	return result, nil
 }
 
-// Count executes a query based on the criteria, order and pagination
-// Returns only the count of matching rows
-func (s *elasticDatastoreQuery) Count(keys ...string) (int64, error) {
-
-	query, err := s.buildQuery()
-	if err != nil {
-		return 0, err
-	}
-
-	// agsMap2 := make(map[string]types.Aggregations)
-
-	card := types.NewCardinalityAggregation()
-	field := "id_"
-	pre := 40000
-	card.Field = &field
-	card.PrecisionThreshold = &pre
-
-	ags := types.Aggregations{
-		Cardinality: card,
-		Filter:      nil,
-		Filters:     nil,
-	}
-
-	agsMap := map[string]types.Aggregations{"count": ags}
-
-	pattern := indexPattern(s.factory, keys...)
-	size := 0
-
-	req := &search.Request{Size: &size, Query: query, Aggregations: agsMap}
-
-	searchObject := s.dbs.tClient.Search().Index(pattern).
-		ExpandWildcards("all").
-		TrackTotalHits("1000000").
-		Request(req)
-
-	res, err := searchObject.Do(context.Background())
-	if err != nil {
-		return 0, err
-	}
-	return res.Hits.Total.Value, nil
-}
-
-// Count2 executes a query based on the criteria, order and pagination
-// Returns only the count of matching rows
-func (s *elasticDatastoreQuery) Count2(keys ...string) (int64, error) {
-
-	query, err := s.buildQuery()
-	if err != nil {
-		return 0, err
-	}
-
-	pattern := indexPattern(s.factory, keys...)
-	size := 1
-
-	req := &search.Request{Size: &size, Query: query}
-
-	searchObject := s.dbs.tClient.Search().Index(pattern).
-		ExpandWildcards("all").
-		TrackTotalHits("1000000").
-		Request(req)
-
-	res, err := searchObject.Do(context.Background())
-	if err != nil {
-		return 0, err
-	}
-	return res.Hits.Total.Value, nil
-}
-
-// Aggregation Execute the query based on the criteria, order and pagination and return the provided aggregation function on the field
-// supported functions: count : agv, sum, min, max
-func (s *elasticDatastoreQuery) Aggregation(field, function string, keys ...string) (value float64, err error) {
-	return 0, fmt.Errorf(NOT_IMPLEMENTED)
-}
-
-// GroupCount Execute the query based on the criteria, grouped by field and return count per group
-func (s *elasticDatastoreQuery) GroupCount(field string, keys ...string) (out map[int]int64, total int64, err error) {
-	return nil, 0, fmt.Errorf(NOT_IMPLEMENTED)
-}
-
-// GroupAggregation Execute the query based on the criteria, order and pagination and return the aggregated value per group
-// supported functions: count : agv, sum, min, max
-func (s *elasticDatastoreQuery) GroupAggregation(field, function string, keys ...string) (out map[any]float64, err error) {
-	return nil, fmt.Errorf(NOT_IMPLEMENTED)
-}
-
-// Histogram returns a time series data points based on the time field, supported intervals: Minute, Hour, Day, week, month
-func (s *elasticDatastoreQuery) Histogram(field, function, timeField string, interval time.Duration, keys ...string) (out map[Timestamp]float64, total float64, err error) {
-	return nil, 0, fmt.Errorf(NOT_IMPLEMENTED)
-}
-
-// Histogram2D returns a two-dimensional time series data points based on the time field, supported intervals: Minute, Hour, Day, week, month
-// the data point is a calculation of the provided function on the selected field
-// supported functions: count : avg, sum, min, max
-func (s *elasticDatastoreQuery) Histogram2D(field, function, dim, timeField string, interval time.Duration, keys ...string) (out map[Timestamp]map[int]float64, total float64, err error) {
-	return nil, 0, fmt.Errorf(NOT_IMPLEMENTED)
-}
-
 // FindSingle Execute query based on the where criteria to get a single (the first) result
 // After the marshaling the result shall be transformed via the query callback chain
 func (s *elasticDatastoreQuery) FindSingle(keys ...string) (entity Entity, err error) {
@@ -344,6 +245,10 @@ func (s *elasticDatastoreQuery) GetIDs(keys ...string) (out []string, err error)
 	}
 	return
 }
+
+// endregion
+
+// region QueryBuilder Delete and Update Execution Methods -------------------------------------------------------------
 
 // Delete Execute delete command based on the where criteria
 func (s *elasticDatastoreQuery) Delete(keys ...string) (total int64, err error) {

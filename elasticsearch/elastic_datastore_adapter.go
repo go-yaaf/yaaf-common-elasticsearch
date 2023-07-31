@@ -235,7 +235,11 @@ func (dbs *ElasticStore) List(factory EntityFactory, entityIDs []string, keys ..
 		},
 	}
 
-	res, err := dbs.tClient.Search().Index(pattern).ExpandWildcards("all").Request(req).Do(context.Background())
+	res, err := dbs.tClient.Search().
+		Index(pattern).
+		ExpandWildcards("all").
+		AllowNoIndices(true).
+		Request(req).Do(context.Background())
 	if err != nil {
 		return nil, err
 	}

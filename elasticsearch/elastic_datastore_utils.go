@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	. "github.com/go-yaaf/yaaf-common/entity"
-	"github.com/go-yaaf/yaaf-common/logger"
 	"reflect"
 	"strings"
 )
@@ -62,37 +61,6 @@ func (dbs *ElasticStore) convertToJson(factory EntityFactory) (Json, error) {
 	return entMap, err
 }
 
-// Add field mapping
-func (dbs *ElasticStore) addFieldMapping2(key string, value any, props Json) {
-	spec := Json{}
-	//sType := struct{type: key, "keyword"
-
-	switch v := value.(type) {
-	case int32:
-		spec["type"] = "integer"
-	case int64:
-		spec["type"] = "long"
-	case int:
-		spec["type"] = "long"
-	case string:
-		spec["type"] = "text"
-	case Timestamp:
-		spec["type"] = "date"
-		spec["format"] = "epoch_millis"
-		props[key] = spec
-	case float32:
-		spec["type"] = "double"
-	case float64:
-		spec["type"] = "double"
-	case bool:
-		spec["type"] = "boolean"
-	default:
-		logger.Error("unsupported type for: %v", v)
-	}
-
-	props[key] = spec
-}
-
 // map struct fields
 func (dbs *ElasticStore) addStructMapping(fType reflect.Type, props Json) {
 	numFields := fType.NumField()
@@ -125,7 +93,7 @@ func (dbs *ElasticStore) addFieldMapping(sf reflect.StructField, props Json) {
 	k := sf.Type.Kind()
 	switch k {
 	case reflect.String:
-		spec["type"] = "text"
+		spec["type"] = "keyword"
 	case reflect.Int:
 		spec["type"] = "long"
 	case reflect.Int8:

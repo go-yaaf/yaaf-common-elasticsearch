@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	. "github.com/go-yaaf/yaaf-common/entity"
+	"time"
 )
 
 // region Heroes Test Model --------------------------------------------------------------------------------------------
@@ -45,14 +46,25 @@ func NewHero1(id string, num int, name, typ, color string) Entity {
 	}
 }
 
+// Get random documents over the last 30 days
 func GetRandomListOfHeroes(size int) []Entity {
+	end := Now()
+	start := end.Add(-24 * 31 * time.Hour)
+	delta := (int64(end) - int64(start)) / int64(size)
+
 	result := make([]Entity, 0)
 
 	for i := 1; i <= size; i++ {
+
+		ts := int64(start) + (int64(i-1) * delta) + rnd.Int63n(delta)
 		hero := NewHero()
 		hero.(*Hero).Id = fmt.Sprintf("%d", i)
+		hero.(*Hero).CreatedOn = Timestamp(ts)
+		hero.(*Hero).UpdatedOn = Timestamp(ts)
+
 		hero.(*Hero).Key = keys[rnd.Intn(len(keys))]
-		hero.(*Hero).Num = 10*i + rnd.Intn(8)
+		//hero.(*Hero).Key = "disney"
+		hero.(*Hero).Num = rnd.Intn(8)
 		hero.(*Hero).Name = getRandomName()
 		hero.(*Hero).Color = colors[rnd.Intn(len(colors))]
 		hero.(*Hero).Type = types[rnd.Intn(len(types))]
