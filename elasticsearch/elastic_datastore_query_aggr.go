@@ -228,11 +228,11 @@ func (s *elasticDatastoreQuery) GroupAggregation(field, function string, keys ..
 	}
 }
 
-// Histogram returns a time series data points based on the time field, supported intervals: Minute, Hour, Day, week, month
+// HistogramOld returns a time series data points based on the time field, supported intervals: Minute, Hour, Day, week, month
 // the data point is a calculation of the provided function on the selected field, each data point includes the number of documents and the calculated value
 // the total is the sum of all calculated values in all the buckets
 // supported functions: count : avg, sum, min, max
-func (s *elasticDatastoreQuery) Histogram(field, function, timeField string, interval time.Duration, keys ...string) (map[Timestamp]Tuple[int64, float64], float64, error) {
+func (s *elasticDatastoreQuery) HistogramOld(field, function, timeField string, interval time.Duration, keys ...string) (map[Timestamp]Tuple[int64, float64], float64, error) {
 	result := make(map[Timestamp]Tuple[int64, float64])
 	total := float64(0)
 
@@ -280,6 +280,85 @@ func (s *elasticDatastoreQuery) Histogram(field, function, timeField string, int
 		result[Timestamp(b.Key)] = Tuple[int64, float64]{Key: b.DocCount, Value: float64(b.DocCount)}
 		total += float64(b.DocCount)
 	}
+
+	return result, total, nil
+}
+
+// Histogram returns a time series data points based on the time field, supported intervals: Minute, Hour, Day, week, month
+// the data point is a calculation of the provided function on the selected field, each data point includes the number of documents and the calculated value
+// the total is the sum of all calculated values in all the buckets
+// supported functions: count : avg, sum, min, max
+func (s *elasticDatastoreQuery) Histogram(field, function, timeField string, interval time.Duration, keys ...string) (map[Timestamp]Tuple[int64, float64], float64, error) {
+	result := make(map[Timestamp]Tuple[int64, float64])
+	total := float64(0)
+
+	query, err := s.buildQuery()
+	if err != nil {
+		return result, 0, err
+	}
+
+	pattern := indexPattern(s.factory, keys...)
+	size := 0
+
+	queryAggregations := *types.NewAggregations()
+	if interval > 0 {
+		fixedInterval := s.getInterval(interval)
+		if len(fixedInterval) == 0 {
+			return nil, 0, fmt.Errorf("%v - unsupported interval", interval)
+		}
+		queryAggregations.DateHistogram = &types.DateHistogramAggregation{
+			Field:         &timeField,
+			FixedInterval: &fixedInterval,
+		}
+	} else {
+		queryAggregations.AutoDateHistogram = &types.AutoDateHistogramAggregation{
+			Buckets: &s.limit,
+			Field:   &timeField,
+		}
+	}
+
+	req := &search.Request{Size: &size, Query: query, Aggregations: map[string]types.Aggregations{"aggs": queryAggregations}}
+
+	searchObject := s.dbs.tClient.Search().Index(pattern).
+		ExpandWildcards("all").
+		Request(req)
+
+	// Log before executing the request
+	s.logLastQuery(searchObject)
+	res, err := searchObject.Do(context.Background())
+	if err != nil {
+		return result, total, err
+	}
+
+	switch tr := res.Aggregations["aggs"].(type) {
+	case *types.DateHistogramAggregate:
+		if buckets, ok := tr.Buckets.([]types.DateHistogramBucket); ok {
+			for _, b := range buckets {
+				result[Timestamp(b.Key)] = Tuple[int64, float64]{Key: b.DocCount, Value: float64(b.DocCount)}
+				total += float64(b.DocCount)
+			}
+		}
+	case *types.AutoDateHistogramAggregate:
+		if buckets, ok := tr.Buckets.([]types.DateHistogramBucket); ok {
+			for _, b := range buckets {
+				result[Timestamp(b.Key)] = Tuple[int64, float64]{Key: b.DocCount, Value: float64(b.DocCount)}
+				total += float64(b.DocCount)
+			}
+		}
+	}
+
+	//tr, ok := res.Aggregations["aggs"].(*types.DateHistogramAggregate)
+	//if !ok {
+	//	return result, total, fmt.Errorf("return aggregation is not *types.DateHistogramAggregate")
+	//}
+	//buckets, ok := tr.Buckets.([]types.DateHistogramBucket)
+	//if !ok {
+	//	return result, total, fmt.Errorf("aggregation buckets is not []types.DateHistogramBucket")
+	//}
+	//for _, b := range buckets {
+	//	result[Timestamp(b.Key)] = Tuple[int64, float64]{Key: b.DocCount, Value: float64(b.DocCount)}
+	//	total += float64(b.DocCount)
+	//}
 
 	return result, total, nil
 }

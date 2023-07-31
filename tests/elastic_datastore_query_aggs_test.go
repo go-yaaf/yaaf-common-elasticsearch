@@ -82,7 +82,9 @@ func (s *DatastoreQueryAggregationsTestSuite) removeAllIndices() {
 func (s *DatastoreQueryAggregationsTestSuite) TestQuery() {
 	//s.singleValueAggregation()
 	//s.groupAggregation()
-	s.countHistogram()
+	//s.countHistogram()
+	s.countHistogramAuto()
+	//s.sumHistogram()
 }
 
 func (s *DatastoreQueryAggregationsTestSuite) singleValueAggregation() {
@@ -130,10 +132,29 @@ func (s *DatastoreQueryAggregationsTestSuite) countHistogram() {
 	for k, v := range result {
 		fmt.Println(k, ": ", v)
 	}
+}
 
-	//result, err = s.sut.Query(NewHero).MatchAll(F("key").Eq("a")).GroupAggregation("num", "count")
-	//require.NoError(s.T(), err)
-	//s.printGroupResult(result)
+func (s *DatastoreQueryAggregationsTestSuite) countHistogramAuto() {
+
+	// Histogram with auto-interval of 20
+	result, total, err := s.sut.Query(NewHero).
+		MatchAll(F("key").Eq("a")).
+		Limit(3).
+		Histogram("color", "count", "createdOn", 0)
+	require.NoError(s.T(), err)
+	fmt.Println(total)
+	for k, v := range result {
+		fmt.Println(k, ": ", v)
+	}
+}
+
+func (s *DatastoreQueryAggregationsTestSuite) sumHistogram() {
+	result, total, err := s.sut.Query(NewHero).MatchAll(F("key").Eq("a")).Histogram("brain", "sum", "createdOn", time.Hour*24)
+	require.NoError(s.T(), err)
+	fmt.Println(total)
+	for k, v := range result {
+		fmt.Println(k, ": ", v)
+	}
 }
 
 // endregion
