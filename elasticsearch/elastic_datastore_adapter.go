@@ -24,6 +24,12 @@ import (
 
 const (
 	ES_DOC_NOT_FOUND = "not found"
+
+	AGG_SUM = "sum"
+	AGG_AVG = "avg"
+	AGG_MIN = "min"
+	AGG_MAX = "max"
+	AGG_CNT = "count"
 )
 
 // region Elastic store definitions ------------------------------------------------------------------------------------

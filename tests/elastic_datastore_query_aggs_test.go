@@ -83,8 +83,11 @@ func (s *DatastoreQueryAggregationsTestSuite) TestQuery() {
 	//s.singleValueAggregation()
 	//s.groupAggregation()
 	//s.countHistogram()
-	s.countHistogramAuto()
-	//s.sumHistogram()
+	//s.countHistogramAuto()
+	s.sumHistogram()
+	s.minHistogram()
+	s.maxHistogram()
+	s.avgHistogram()
 }
 
 func (s *DatastoreQueryAggregationsTestSuite) singleValueAggregation() {
@@ -149,12 +152,39 @@ func (s *DatastoreQueryAggregationsTestSuite) countHistogramAuto() {
 }
 
 func (s *DatastoreQueryAggregationsTestSuite) sumHistogram() {
-	result, total, err := s.sut.Query(NewHero).MatchAll(F("key").Eq("a")).Histogram("brain", "sum", "createdOn", time.Hour*24)
+	result, total, err := s.sut.Query(NewHero).MatchAll(F("key").Eq("a")).Histogram("brain", es.AGG_SUM, "createdOn", time.Hour*24)
 	require.NoError(s.T(), err)
-	fmt.Println(total)
 	for k, v := range result {
-		fmt.Println(k, ": ", v)
+		fmt.Println(k, " Sum: ", v)
 	}
+	fmt.Println("SUM total", total, "------------------------------")
+}
+
+func (s *DatastoreQueryAggregationsTestSuite) minHistogram() {
+	result, total, err := s.sut.Query(NewHero).MatchAll(F("key").Eq("a")).Histogram("brain", es.AGG_MIN, "createdOn", time.Hour*24)
+	require.NoError(s.T(), err)
+	for k, v := range result {
+		fmt.Println(k, " Min: ", v)
+	}
+	fmt.Println("MIN total", total, "------------------------------")
+}
+
+func (s *DatastoreQueryAggregationsTestSuite) maxHistogram() {
+	result, total, err := s.sut.Query(NewHero).MatchAll(F("key").Eq("a")).Histogram("brain", es.AGG_MAX, "createdOn", time.Hour*24)
+	require.NoError(s.T(), err)
+	for k, v := range result {
+		fmt.Println(k, " Max: ", v)
+	}
+	fmt.Println("MAX total", total, "------------------------------")
+}
+
+func (s *DatastoreQueryAggregationsTestSuite) avgHistogram() {
+	result, total, err := s.sut.Query(NewHero).MatchAll(F("key").Eq("a")).Histogram("brain", es.AGG_AVG, "createdOn", time.Hour*24)
+	require.NoError(s.T(), err)
+	for k, v := range result {
+		fmt.Println(k, " Avg: ", v)
+	}
+	fmt.Println("AVG total", total, "------------------------------")
 }
 
 // endregion

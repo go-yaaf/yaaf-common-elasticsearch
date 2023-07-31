@@ -228,67 +228,11 @@ func (s *elasticDatastoreQuery) GroupAggregation(field, function string, keys ..
 	}
 }
 
-// HistogramOld returns a time series data points based on the time field, supported intervals: Minute, Hour, Day, week, month
+// Histogram1 returns a time series data points based on the time field, supported intervals: Minute, Hour, Day, week, month
 // the data point is a calculation of the provided function on the selected field, each data point includes the number of documents and the calculated value
 // the total is the sum of all calculated values in all the buckets
 // supported functions: count : avg, sum, min, max
-func (s *elasticDatastoreQuery) HistogramOld(field, function, timeField string, interval time.Duration, keys ...string) (map[Timestamp]Tuple[int64, float64], float64, error) {
-	result := make(map[Timestamp]Tuple[int64, float64])
-	total := float64(0)
-
-	query, err := s.buildQuery()
-	if err != nil {
-		return result, 0, err
-	}
-
-	pattern := indexPattern(s.factory, keys...)
-	size := 0
-	fixedInterval := s.getInterval(interval)
-	if len(fixedInterval) == 0 {
-		return nil, 0, fmt.Errorf("%v - unsupported interval", interval)
-	}
-
-	queryAggregations := *types.NewAggregations()
-	queryAggregations.DateHistogram = &types.DateHistogramAggregation{
-		Field:         &timeField,
-		FixedInterval: &fixedInterval,
-	}
-
-	req := &search.Request{Size: &size, Query: query, Aggregations: map[string]types.Aggregations{"aggs": queryAggregations}}
-
-	searchObject := s.dbs.tClient.Search().Index(pattern).
-		ExpandWildcards("all").
-		Request(req)
-
-	// Log before executing the request
-	s.logLastQuery(searchObject)
-	res, err := searchObject.Do(context.Background())
-	if err != nil {
-		return result, total, err
-	}
-
-	resAggs := res.Aggregations
-	tr, ok := resAggs["aggs"].(*types.DateHistogramAggregate)
-	if !ok {
-		return result, total, fmt.Errorf("return aggregation is not *types.DateHistogramAggregate")
-	}
-	buckets, ok := tr.Buckets.([]types.DateHistogramBucket)
-	if !ok {
-		return result, total, fmt.Errorf("aggregation buckets is not []types.DateHistogramBucket")
-	}
-	for _, b := range buckets {
-		result[Timestamp(b.Key)] = Tuple[int64, float64]{Key: b.DocCount, Value: float64(b.DocCount)}
-		total += float64(b.DocCount)
-	}
-
-	return result, total, nil
-}
-
-// Histogram returns a time series data points based on the time field, supported intervals: Minute, Hour, Day, week, month
-// the data point is a calculation of the provided function on the selected field, each data point includes the number of documents and the calculated value
-// the total is the sum of all calculated values in all the buckets
-// supported functions: count : avg, sum, min, max
-func (s *elasticDatastoreQuery) Histogram(field, function, timeField string, interval time.Duration, keys ...string) (map[Timestamp]Tuple[int64, float64], float64, error) {
+func (s *elasticDatastoreQuery) Histogram1(field, function, timeField string, interval time.Duration, keys ...string) (map[Timestamp]Tuple[int64, float64], float64, error) {
 	result := make(map[Timestamp]Tuple[int64, float64])
 	total := float64(0)
 
@@ -363,6 +307,58 @@ func (s *elasticDatastoreQuery) Histogram(field, function, timeField string, int
 	return result, total, nil
 }
 
+// Histogram returns a time series data points based on the time field, supported intervals: Minute, Hour, Day, week, month
+// the data point is a calculation of the provided function on the selected field, each data point includes the number of documents and the calculated value
+// the total is the sum of all calculated values in all the buckets
+// supported functions: count : avg, sum, min, max
+func (s *elasticDatastoreQuery) Histogram(field, function, timeField string, interval time.Duration, keys ...string) (map[Timestamp]Tuple[int64, float64], float64, error) {
+	result := make(map[Timestamp]Tuple[int64, float64])
+	total := float64(0)
+
+	query, err := s.buildQuery()
+	if err != nil {
+		return result, 0, err
+	}
+
+	pattern := indexPattern(s.factory, keys...)
+	size := 0
+
+	queryAggregations := *types.NewAggregations()
+	if interval > 0 {
+		fixedInterval := s.getInterval(interval)
+		if len(fixedInterval) == 0 {
+			return nil, 0, fmt.Errorf("%v - unsupported interval", interval)
+		}
+		queryAggregations.DateHistogram = &types.DateHistogramAggregation{
+			Field:         &timeField,
+			FixedInterval: &fixedInterval,
+		}
+	} else {
+		queryAggregations.AutoDateHistogram = &types.AutoDateHistogramAggregation{
+			Buckets: &s.limit,
+			Field:   &timeField,
+		}
+	}
+
+	// Add sub aggregation: sum
+	s.addSubAggregation(&queryAggregations, field, function)
+
+	req := &search.Request{Size: &size, Query: query, Aggregations: map[string]types.Aggregations{"aggs": queryAggregations}}
+
+	searchObject := s.dbs.tClient.Search().Index(pattern).
+		ExpandWildcards("all").
+		Request(req)
+
+	// Log before executing the request
+	s.logLastQuery(searchObject)
+	res, err := searchObject.Do(context.Background())
+	if err != nil {
+		return result, total, err
+	}
+
+	return s.processAggregateResults(res.Aggregations["aggs"])
+}
+
 // Histogram2D returns a two-dimensional time series data points based on the time field, supported intervals: Minute, Hour, Day, week, month
 // the data point is a calculation of the provided function on the selected field
 // supported functions: count : avg, sum, min, max
@@ -373,6 +369,7 @@ func (s *elasticDatastoreQuery) Histogram2D(field, function, dim, timeField stri
 // endregion
 
 // region Internal aggregation helper -methods -------------------------------------------------------------------------
+
 // Convert time.Duration interval to Elasticsearch Duration:
 func (s *elasticDatastoreQuery) getInterval(interval time.Duration) string {
 
@@ -397,6 +394,88 @@ func (s *elasticDatastoreQuery) getInterval(interval time.Duration) string {
 
 	// duration longer than 24 hours should be represented as days
 	return fmt.Sprintf("%dd", interval/(24*time.Hour))
+}
+
+// Add sub aggregation to an existing aggregation
+func (s *elasticDatastoreQuery) addSubAggregation(aggregations *types.Aggregations, field, function string) {
+
+	// Add sub aggregation: sum
+	if function == AGG_SUM {
+		subAgg := types.NewAggregations()
+		subAgg.Sum = types.NewSumAggregation()
+		subAgg.Sum.Field = &field
+		aggregations.Aggregations[function] = *subAgg
+	}
+	// Add sub aggregation: avg
+	if function == AGG_AVG {
+		subAgg := types.NewAggregations()
+		subAgg.Avg = types.NewAverageAggregation()
+		subAgg.Avg.Field = &field
+		aggregations.Aggregations[function] = *subAgg
+	}
+	// Add sub aggregation: min
+	if function == AGG_MIN {
+		subAgg := types.NewAggregations()
+		subAgg.Min = types.NewMinAggregation()
+		subAgg.Min.Field = &field
+		aggregations.Aggregations[function] = *subAgg
+	}
+	// Add sub aggregation: max
+	if function == AGG_MAX {
+		subAgg := types.NewAggregations()
+		subAgg.Max = types.NewMaxAggregation()
+		subAgg.Max.Field = &field
+		aggregations.Aggregations[function] = *subAgg
+	}
+}
+
+// Process aggregation results
+func (s *elasticDatastoreQuery) processAggregateResults(aggregate types.Aggregate) (map[Timestamp]Tuple[int64, float64], float64, error) {
+	result := make(map[Timestamp]Tuple[int64, float64])
+	total := float64(0)
+
+	switch tr := aggregate.(type) {
+	case *types.DateHistogramAggregate:
+		if buckets, ok := tr.Buckets.([]types.DateHistogramBucket); ok {
+			for _, b := range buckets {
+				if tpl, err := s.processAggregateBucket(&b); err == nil {
+					result[Timestamp(b.Key)] = tpl
+					total += float64(tpl.Key)
+				}
+			}
+		}
+	case *types.AutoDateHistogramAggregate:
+		if buckets, ok := tr.Buckets.([]types.DateHistogramBucket); ok {
+			for _, b := range buckets {
+				if tpl, err := s.processAggregateBucket(&b); err == nil {
+					result[Timestamp(b.Key)] = tpl
+					total += float64(tpl.Key)
+				}
+			}
+		}
+	}
+
+	return result, total, nil
+}
+
+// Process aggregation results bucket
+func (s *elasticDatastoreQuery) processAggregateBucket(bucket *types.DateHistogramBucket) (Tuple[int64, float64], error) {
+
+	result := Tuple[int64, float64]{Key: bucket.DocCount, Value: float64(bucket.DocCount)}
+
+	for _, v := range bucket.Aggregations {
+		switch agg := v.(type) {
+		case *types.SumAggregate:
+			result.Value = float64(agg.Value)
+		case *types.MinAggregate:
+			result.Value = float64(agg.Value)
+		case *types.MaxAggregate:
+			result.Value = float64(agg.Value)
+		case *types.AvgAggregate:
+			result.Value = float64(agg.Value)
+		}
+	}
+	return result, nil
 }
 
 // endregion
