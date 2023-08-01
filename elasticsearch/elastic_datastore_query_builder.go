@@ -77,12 +77,43 @@ func (s *elasticDatastoreQuery) buildQuery() (*types.Query, error) {
 		rootFilters = append(rootFilters, globalOr)
 	}
 
+	// If range is defined, add it to the filters
+	if len(s.rangeField) > 0 {
+		if rf, err := s.getRangeFilter(); err != nil {
+			return nil, ElasticError(err)
+		} else {
+			rootFilters = append(rootFilters, rf)
+		}
+	}
+
 	rootQuery.Filter = rootFilters
 	rootQuery.MustNot = notQueries
 	result := &types.Query{
 		Bool: rootQuery,
 	}
 	return result, nil
+}
+
+// endregion
+
+// region Calculate range filter DSL -----------------------------------------------------------------------------------
+
+func (s *elasticDatastoreQuery) getRangeFilter() (types.Query, error) {
+
+	rangeQuery := make(map[string]types.RangeQuery)
+	drq := types.NewDateRangeQuery()
+
+	format := "epoch_millis"
+	drq.From = fmt.Sprintf("%d", s.rangeFrom)
+	drq.To = fmt.Sprintf("%d", s.rangeTo)
+	drq.Format = &format
+
+	rangeQuery[s.rangeField] = drq
+	rangeFilter := types.Query{
+		Range: rangeQuery,
+	}
+
+	return rangeFilter, nil
 }
 
 // endregion

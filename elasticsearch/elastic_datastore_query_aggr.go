@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/elastic/go-elasticsearch/v8/typedapi/core/search"
-	. "github.com/go-yaaf/yaaf-common/database"
 	. "github.com/go-yaaf/yaaf-common/entity"
 )
 
@@ -109,20 +108,7 @@ func (s *elasticDatastoreQuery) Aggregation(field, function string, keys ...stri
 	if result, ok := res.Aggregations["aggs"]; !ok {
 		return 0, fmt.Errorf("can't find aggregated value: aggs")
 	} else {
-		switch v := result.(type) {
-		case *types.CardinalityAggregate:
-			return float64(v.Value), nil
-		case *types.AvgAggregate:
-			return float64(v.Value), nil
-		case *types.MinAggregate:
-			return float64(v.Value), nil
-		case *types.MaxAggregate:
-			return float64(v.Value), nil
-		case *types.SumAggregate:
-			return float64(v.Value), nil
-		default:
-			return 0, fmt.Errorf("unsupported aggreation type: %v", v)
-		}
+		return s.getAggregatedValue(result)
 	}
 }
 
@@ -234,8 +220,52 @@ func (s *elasticDatastoreQuery) Histogram(field, function, timeField string, int
 // Histogram2D returns a two-dimensional time series data points based on the time field, supported intervals: Minute, Hour, Day, week, month
 // the data point is a calculation of the provided function on the selected field
 // supported functions: count : avg, sum, min, max
-func (s *elasticDatastoreQuery) Histogram2D(field, function, dim, timeField string, interval time.Duration, keys ...string) (out map[Timestamp]map[int]float64, total float64, err error) {
-	return nil, 0, fmt.Errorf(NOT_IMPLEMENTED)
+func (s *elasticDatastoreQuery) Histogram2D(field, function, dim, timeField string, interval time.Duration, keys ...string) (map[Timestamp]map[any]Tuple[int64, float64], float64, error) {
+	result := make(map[Timestamp]map[any]Tuple[int64, float64])
+	total := float64(0)
+
+	query, err := s.buildQuery()
+	if err != nil {
+		return result, 0, err
+	}
+
+	pattern := indexPattern(s.factory, keys...)
+	size := 0
+
+	queryAggregations := *types.NewAggregations()
+	if interval > 0 {
+		fixedInterval := s.getInterval(interval)
+		if len(fixedInterval) == 0 {
+			return nil, 0, fmt.Errorf("%v - unsupported interval", interval)
+		}
+		queryAggregations.DateHistogram = &types.DateHistogramAggregation{
+			Field:         &timeField,
+			FixedInterval: &fixedInterval,
+		}
+	} else {
+		queryAggregations.AutoDateHistogram = &types.AutoDateHistogramAggregation{
+			Buckets: &s.limit,
+			Field:   &timeField,
+		}
+	}
+
+	// Add sub aggregation
+	s.addGroupAggregation(&queryAggregations, field, function, dim)
+
+	req := &search.Request{Size: &size, Query: query, Aggregations: map[string]types.Aggregations{"aggs": queryAggregations}}
+
+	searchObject := s.dbs.tClient.Search().Index(pattern).
+		ExpandWildcards("all").
+		Request(req)
+
+	// Log before executing the request
+	s.logLastQuery(searchObject)
+	res, err := searchObject.Do(context.Background())
+	if err != nil {
+		return result, total, ElasticError(err)
+	}
+
+	return s.processHistogram2DAggregateBucket(res.Aggregations["aggs"], function)
 }
 
 // endregion
@@ -266,6 +296,42 @@ func (s *elasticDatastoreQuery) getInterval(interval time.Duration) string {
 
 	// duration longer than 24 hours should be represented as days
 	return fmt.Sprintf("%dd", interval/(24*time.Hour))
+}
+
+// Extract aggregated float value from different aggregate types
+func (s *elasticDatastoreQuery) getAggregatedValue(aggregate types.Aggregate) (float64, error) {
+	switch v := aggregate.(type) {
+	case *types.CardinalityAggregate:
+		return float64(v.Value), nil
+	case *types.AvgAggregate:
+		return float64(v.Value), nil
+	case *types.MinAggregate:
+		return float64(v.Value), nil
+	case *types.MaxAggregate:
+		return float64(v.Value), nil
+	case *types.SumAggregate:
+		return float64(v.Value), nil
+	default:
+		return 0, fmt.Errorf("unsupported aggreation type: %v", v)
+	}
+}
+
+// Add group by dimension
+func (s *elasticDatastoreQuery) addGroupAggregation(aggregations *types.Aggregations, field, function, dim string) {
+
+	fieldAgg := types.NewAggregations()
+	fieldAgg.Terms = types.NewTermsAggregation()
+	fieldAgg.Terms.Field = &field
+
+	dimAgg := types.NewAggregations()
+	dimAgg.Terms = types.NewTermsAggregation()
+	dimAgg.Terms.Field = &dim
+
+	fieldAgg.Aggregations["dim"] = *dimAgg
+
+	s.addSubAggregation(fieldAgg, dim, function)
+
+	aggregations.Aggregations[function] = *fieldAgg
 }
 
 // Add sub aggregation to an existing aggregation
@@ -379,19 +445,10 @@ func (s *elasticDatastoreQuery) processGroupAggregateResults(aggregate types.Agg
 
 // Process histogram aggregation results bucket
 func (s *elasticDatastoreQuery) processHistogramAggregateBucket(bucket *types.DateHistogramBucket) (Tuple[int64, float64], error) {
-
 	result := Tuple[int64, float64]{Key: bucket.DocCount, Value: float64(bucket.DocCount)}
-
 	for _, v := range bucket.Aggregations {
-		switch agg := v.(type) {
-		case *types.SumAggregate:
-			result.Value = float64(agg.Value)
-		case *types.MinAggregate:
-			result.Value = float64(agg.Value)
-		case *types.MaxAggregate:
-			result.Value = float64(agg.Value)
-		case *types.AvgAggregate:
-			result.Value = float64(agg.Value)
+		if val, err := s.getAggregatedValue(v); err == nil {
+			result.Value = val
 		}
 	}
 	return result, nil
@@ -401,19 +458,80 @@ func (s *elasticDatastoreQuery) processHistogramAggregateBucket(bucket *types.Da
 func (s *elasticDatastoreQuery) processGroupAggregateBucket(aggregates map[string]types.Aggregate) (float64, error) {
 
 	for _, aggType := range aggregates {
-		switch agg := aggType.(type) {
-		case *types.SumAggregate:
-			return float64(agg.Value), nil
-		case *types.MinAggregate:
-			return float64(agg.Value), nil
-		case *types.MaxAggregate:
-			return float64(agg.Value), nil
-		case *types.AvgAggregate:
-			return float64(agg.Value), nil
-		}
+		return s.getAggregatedValue(aggType)
 	}
 
 	return 0, errors.New("aggregate type not supported")
+}
+
+// func (s *elasticDatastoreQuery) Histogram2D(field, function, dim, timeField string, interval time.Duration, keys ...string) (map[Timestamp]map[any]Tuple[int64, float64], float64, error) {
+// Process histogram aggregation results bucket
+func (s *elasticDatastoreQuery) processHistogram2DAggregateBucket(aggregate types.Aggregate, aggregationName string) (map[Timestamp]map[any]Tuple[int64, float64], float64, error) {
+
+	result := make(map[Timestamp]map[any]Tuple[int64, float64])
+
+	dha := aggregate.(*types.DateHistogramAggregate)
+
+	dhb := dha.Buckets.([]types.DateHistogramBucket)
+	for _, b := range dhb {
+		dp := make(map[any]Tuple[int64, float64])
+		result[Timestamp(b.Key)] = dp
+
+		aggLevel1 := b.Aggregations[aggregationName]
+
+		if mdp, err := getMultiDataPoints(aggLevel1.(*types.StringTermsAggregate)); err == nil {
+			result[Timestamp(b.Key)] = mdp
+		}
+	}
+
+	return result, 0, nil
+}
+
+// Get multiple data points (for 2D histogram) per time series sample
+func getMultiDataPoints(aggregate *types.StringTermsAggregate) (map[any]Tuple[int64, float64], error) {
+
+	result := make(map[any]Tuple[int64, float64])
+
+	if bucket, ok := aggregate.Buckets.(types.StringTermsBucket); ok {
+		for _, a := range bucket.Aggregations {
+			if tpl, err := getDataPoints(a.(*types.StringTermsAggregate)); err == nil {
+				result[bucket.Key] = tpl
+			}
+		}
+	}
+
+	if buckets, ok := aggregate.Buckets.([]types.StringTermsBucket); ok {
+		for _, b := range buckets {
+			for _, a := range b.Aggregations {
+				if tpl, err := getDataPoints(a.(*types.StringTermsAggregate)); err == nil {
+					result[b.Key] = tpl
+				}
+			}
+		}
+	}
+
+	return result, nil
+}
+
+// Get a single data points (for 2D histogram)
+func getDataPoints(aggregate *types.StringTermsAggregate) (Tuple[int64, float64], error) {
+
+	if bucket, ok := aggregate.Buckets.(types.StringTermsBucket); ok {
+		fmt.Println(bucket.Key)
+		fmt.Println(bucket.DocCount)
+		result := Tuple[int64, float64]{Key: bucket.DocCount, Value: float64(bucket.DocCount)}
+		return result, nil
+	}
+
+	if buckets, ok := aggregate.Buckets.([]types.StringTermsBucket); ok {
+		for _, b := range buckets {
+			result := Tuple[int64, float64]{Key: b.DocCount, Value: float64(b.DocCount)}
+			fmt.Println(b.Key)
+			return result, nil
+		}
+	}
+
+	return Tuple[int64, float64]{}, errors.New("not supported")
 }
 
 // endregion

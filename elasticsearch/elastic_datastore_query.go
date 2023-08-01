@@ -15,16 +15,19 @@ import (
 // region queryBuilder internal structure ------------------------------------------------------------------------------
 
 type elasticDatastoreQuery struct {
-	dbs        *ElasticStore
-	factory    EntityFactory
-	allFilters [][]QueryFilter
-	anyFilters [][]QueryFilter
-	ascOrders  []any
-	descOrders []any
-	callbacks  []func(in Entity) Entity
-	page       int
-	limit      int
-	lastQuery  string
+	dbs        *ElasticStore            // A reference to the underlying IDatastore
+	factory    EntityFactory            // The entity factory method
+	allFilters [][]QueryFilter          // List of lists of AND filters
+	anyFilters [][]QueryFilter          // List of lists of OR filters
+	ascOrders  []any                    // List of fields for ASC order
+	descOrders []any                    // List of fields for DESC order
+	callbacks  []func(in Entity) Entity // List of entity transformation callback functions
+	page       int                      // Page number (for pagination)
+	limit      int                      // Page size: how many results in a page (for pagination)
+	rangeField string                   // Field name for range filter (must be timestamp field)
+	lastQuery  string                   // Holds the native query DSL of the last query (for debugging)
+	rangeFrom  Timestamp                // Start timestamp for range filter
+	rangeTo    Timestamp                // End timestamp for range filter
 }
 
 // endregion
@@ -44,6 +47,14 @@ func (s *elasticDatastoreQuery) Filter(filter QueryFilter) IQuery {
 	if filter.IsActive() {
 		s.allFilters = append(s.allFilters, []QueryFilter{filter})
 	}
+	return s
+}
+
+// Range add time frame filter on specific time field
+func (s *elasticDatastoreQuery) Range(field string, from Timestamp, to Timestamp) IQuery {
+	s.rangeField = field
+	s.rangeFrom = from
+	s.rangeTo = to
 	return s
 }
 
