@@ -88,7 +88,7 @@ func (s *DatastoreQueryHistogramTestSuite) countColorHistogram2D() {
 
 	result, total, err := s.sut.Query(NewHero).
 		MatchAll(F("key").Eq("a")).
-		Histogram2D("color", "count", "type", "createdOn", 24*time.Hour)
+		Histogram2D("num", "avg", "color", "createdOn", 24*time.Hour)
 	require.NoError(s.T(), err)
 	fmt.Println(total)
 

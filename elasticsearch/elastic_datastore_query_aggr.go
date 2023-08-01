@@ -198,10 +198,10 @@ func (s *elasticDatastoreQuery) Histogram(field, function, timeField string, int
 		}
 	}
 
-	// Add sub aggregation: sum
+	// Add sub aggregation:
 	s.addSubAggregation(&queryAggregations, field, function)
 
-	req := &search.Request{Size: &size, Query: query, Aggregations: map[string]types.Aggregations{"aggs": queryAggregations}}
+	req := &search.Request{Size: &size, Query: query, Aggregations: map[string]types.Aggregations{"0": queryAggregations}}
 
 	searchObject := s.dbs.tClient.Search().Index(pattern).
 		ExpandWildcards("all").
@@ -214,7 +214,7 @@ func (s *elasticDatastoreQuery) Histogram(field, function, timeField string, int
 		return result, total, ElasticError(err)
 	}
 
-	return s.processHistogramAggregateResults(res.Aggregations["aggs"])
+	return s.processHistogramAggregateResults(res.Aggregations["0"])
 }
 
 // Histogram2D returns a two-dimensional time series data points based on the time field, supported intervals: Minute, Hour, Day, week, month
@@ -252,7 +252,7 @@ func (s *elasticDatastoreQuery) Histogram2D(field, function, dim, timeField stri
 	// Add sub aggregation
 	s.addGroupAggregation(&queryAggregations, field, function, dim)
 
-	req := &search.Request{Size: &size, Query: query, Aggregations: map[string]types.Aggregations{"aggs": queryAggregations}}
+	req := &search.Request{Size: &size, Query: query, Aggregations: map[string]types.Aggregations{"0": queryAggregations}}
 
 	searchObject := s.dbs.tClient.Search().Index(pattern).
 		ExpandWildcards("all").
@@ -265,7 +265,7 @@ func (s *elasticDatastoreQuery) Histogram2D(field, function, dim, timeField stri
 		return result, total, ElasticError(err)
 	}
 
-	return s.processHistogram2DAggregateBucket(res.Aggregations["aggs"], function)
+	return s.processHistogram2DAggregateBucket(res.Aggregations["0"], function)
 }
 
 // endregion
@@ -321,16 +321,9 @@ func (s *elasticDatastoreQuery) addGroupAggregation(aggregations *types.Aggregat
 
 	fieldAgg := types.NewAggregations()
 	fieldAgg.Terms = types.NewTermsAggregation()
-	fieldAgg.Terms.Field = &field
+	fieldAgg.Terms.Field = &dim
 
-	dimAgg := types.NewAggregations()
-	dimAgg.Terms = types.NewTermsAggregation()
-	dimAgg.Terms.Field = &dim
-
-	fieldAgg.Aggregations["dim"] = *dimAgg
-
-	s.addSubAggregation(fieldAgg, dim, function)
-
+	s.addSubAggregation(fieldAgg, field, function)
 	aggregations.Aggregations[function] = *fieldAgg
 }
 
@@ -474,64 +467,12 @@ func (s *elasticDatastoreQuery) processHistogram2DAggregateBucket(aggregate type
 
 	dhb := dha.Buckets.([]types.DateHistogramBucket)
 	for _, b := range dhb {
-		dp := make(map[any]Tuple[int64, float64])
-		result[Timestamp(b.Key)] = dp
-
-		aggLevel1 := b.Aggregations[aggregationName]
-
-		if mdp, err := getMultiDataPoints(aggLevel1.(*types.StringTermsAggregate)); err == nil {
-			result[Timestamp(b.Key)] = mdp
+		if dp, _, err := s.processGroupAggregateResults(b.Aggregations[aggregationName]); err == nil {
+			result[Timestamp(b.Key)] = dp
 		}
 	}
 
 	return result, 0, nil
-}
-
-// Get multiple data points (for 2D histogram) per time series sample
-func getMultiDataPoints(aggregate *types.StringTermsAggregate) (map[any]Tuple[int64, float64], error) {
-
-	result := make(map[any]Tuple[int64, float64])
-
-	if bucket, ok := aggregate.Buckets.(types.StringTermsBucket); ok {
-		for _, a := range bucket.Aggregations {
-			if tpl, err := getDataPoints(a.(*types.StringTermsAggregate)); err == nil {
-				result[bucket.Key] = tpl
-			}
-		}
-	}
-
-	if buckets, ok := aggregate.Buckets.([]types.StringTermsBucket); ok {
-		for _, b := range buckets {
-			for _, a := range b.Aggregations {
-				if tpl, err := getDataPoints(a.(*types.StringTermsAggregate)); err == nil {
-					result[b.Key] = tpl
-				}
-			}
-		}
-	}
-
-	return result, nil
-}
-
-// Get a single data points (for 2D histogram)
-func getDataPoints(aggregate *types.StringTermsAggregate) (Tuple[int64, float64], error) {
-
-	if bucket, ok := aggregate.Buckets.(types.StringTermsBucket); ok {
-		fmt.Println(bucket.Key)
-		fmt.Println(bucket.DocCount)
-		result := Tuple[int64, float64]{Key: bucket.DocCount, Value: float64(bucket.DocCount)}
-		return result, nil
-	}
-
-	if buckets, ok := aggregate.Buckets.([]types.StringTermsBucket); ok {
-		for _, b := range buckets {
-			result := Tuple[int64, float64]{Key: b.DocCount, Value: float64(b.DocCount)}
-			fmt.Println(b.Key)
-			return result, nil
-		}
-	}
-
-	return Tuple[int64, float64]{}, errors.New("not supported")
 }
 
 // endregion

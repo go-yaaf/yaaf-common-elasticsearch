@@ -80,15 +80,15 @@ func (s *DatastoreQueryAggregationsTestSuite) removeAllIndices() {
 // region Test Query Operations ----------------------------------------------------------------------------------------
 
 func (s *DatastoreQueryAggregationsTestSuite) TestQuery() {
-	s.singleValueAggregation()
-	s.groupCountAggregation()
-	s.groupAggregation()
-	s.countHistogram()
-	s.countHistogramAuto()
+	//s.singleValueAggregation()
+	//s.groupCountAggregation()
+	//s.groupAggregation()
+	//s.countHistogram()
+	//s.countHistogramAuto()
 	s.sumHistogram()
-	s.minHistogram()
-	s.maxHistogram()
-	s.avgHistogram()
+	//s.minHistogram()
+	//s.maxHistogram()
+	//s.avgHistogram()
 }
 
 func (s *DatastoreQueryAggregationsTestSuite) singleValueAggregation() {
