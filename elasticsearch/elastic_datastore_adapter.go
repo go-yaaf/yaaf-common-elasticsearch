@@ -491,3 +491,14 @@ func (dbs *ElasticStore) exists(pattern, entityID string) (bool, error) {
 }
 
 //endregion
+
+// region Datastore native operations ----------------------------------------------------------------------------------
+
+// ExecuteQuery Execute native KQL query
+func (dbs *ElasticStore) ExecuteQuery(query string, args ...any) ([]Json, error) {
+	// TODO: create native KQL query and execute in elasticsearch
+
+	return nil, fmt.Errorf("not yet implemented")
+}
+
+//endregion
