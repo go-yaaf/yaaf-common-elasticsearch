@@ -85,10 +85,11 @@ func (s *DatastoreQueryAggregationsTestSuite) TestQuery() {
 	//s.groupAggregation()
 	//s.countHistogram()
 	//s.countHistogramAuto()
-	s.sumHistogram()
+	//s.sumHistogram()
 	//s.minHistogram()
 	//s.maxHistogram()
 	//s.avgHistogram()
+	s.nativeQuery()
 }
 
 func (s *DatastoreQueryAggregationsTestSuite) singleValueAggregation() {
@@ -175,8 +176,14 @@ func (s *DatastoreQueryAggregationsTestSuite) countHistogramAuto() {
 }
 
 func (s *DatastoreQueryAggregationsTestSuite) sumHistogram() {
-	result, total, err := s.sut.Query(NewHero).MatchAll(F("key").Eq("a")).Histogram("brain", es.AGG_SUM, "createdOn", time.Hour*24)
+
+	q := s.sut.Query(NewHero)
+	result, total, err := q.MatchAll(F("key").Eq("a")).Histogram("brain", es.AGG_SUM, "createdOn", time.Hour*24)
 	require.NoError(s.T(), err)
+
+	str := q.ToString()
+	require.NotEmptyf(s.T(), str, "query is empty")
+
 	for k, v := range result {
 		fmt.Println(k, " Sum: ", v)
 	}
@@ -210,4 +217,18 @@ func (s *DatastoreQueryAggregationsTestSuite) avgHistogram() {
 	fmt.Println("AVG total", total, "------------------------------")
 }
 
+func (s *DatastoreQueryAggregationsTestSuite) nativeQuery() {
+
+	kql := `{"aggregations":{"0":{"aggregations":{"sum":{"sum":{"field":"brain"}}},"date_histogram":{"field":"createdOn","fixed_interval":"1d"}}},"query":{"bool":{"filter":[{"term":{"key":{"value":"a"}}}]}},"size":0}`
+
+	res, err := s.sut.ExecuteQuery(kql)
+	require.NoError(s.T(), err)
+
+	require.NotNilf(s.T(), res, "result is empty")
+}
+
 // endregion
+
+/*
+{"aggregations":{"0":{"aggregations":{"sum":{"sum":{"field":"brain"}}},"date_histogram":{"field":"createdOn","fixed_interval":"1d"}}},"query":{"bool":{"filter":[{"term":{"key":{"value":"a"}}}]}},"size":0}
+*/

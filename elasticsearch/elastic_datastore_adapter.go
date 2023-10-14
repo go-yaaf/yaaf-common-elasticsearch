@@ -496,9 +496,24 @@ func (dbs *ElasticStore) exists(pattern, entityID string) (bool, error) {
 
 // ExecuteQuery Execute native KQL query
 func (dbs *ElasticStore) ExecuteQuery(query string, args ...any) ([]Json, error) {
-	// TODO: create native KQL query and execute in elasticsearch
+	// TODO: use template engine to inject arguments into query placeholders
 
-	return nil, fmt.Errorf("not yet implemented")
+	r := strings.NewReader(query)
+	res, err := dbs.tClient.Search().Raw(r).Do(context.Background())
+	if err != nil {
+		return nil, ElasticError(err)
+	}
+
+	// If it is aggregated query, return list of aggregations
+	results := make([]Json, 0)
+	result := make(map[string]any)
+
+	for k, v := range res.Aggregations {
+		result[k] = v
+	}
+	results = append(results, result)
+
+	return results, nil
 }
 
 //endregion
