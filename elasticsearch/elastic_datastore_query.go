@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"github.com/elastic/go-elasticsearch/v8/typedapi/core/search"
+	"github.com/elastic/go-elasticsearch/v8/typedapi/types/enums/expandwildcard"
 	. "github.com/go-yaaf/yaaf-common/database"
 	. "github.com/go-yaaf/yaaf-common/entity"
 	"github.com/go-yaaf/yaaf-common/utils"
@@ -151,7 +152,7 @@ func (s *elasticDatastoreQuery) Find(keys ...string) ([]Entity, int64, error) {
 	req := &search.Request{Size: &size, From: &from, Query: query}
 
 	searchObject := s.dbs.tClient.Search().Index(pattern).
-		ExpandWildcards("all").
+		ExpandWildcards(expandwildcard.All).
 		AllowNoIndices(true).
 		TrackTotalHits("1000000").
 		Sort(sort).

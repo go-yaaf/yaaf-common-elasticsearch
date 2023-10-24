@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/elastic/go-elasticsearch/v8/typedapi/types/enums/expandwildcard"
 	"net/http"
 	"os"
 	"strconv"
@@ -53,21 +54,21 @@ func indexPattern(ef EntityFactory, keys ...string) (pattern string) {
 
 // Resolve index pattern from entity class name
 func indexPatternFromTable(tableName string, keys ...string) (pattern string) {
-	accountId := ""
+	shard := ""
 	if len(keys) > 0 {
-		accountId = keys[0]
+		shard = keys[0]
 	}
 	// Custom tables conversion
 	table := tableName
-	idx := strings.Index(table, "-{{")
+	idx := strings.Index(table, "-{")
 	if idx > 0 {
 		table = table[0:idx]
 	}
 
-	if len(accountId) == 0 {
+	if len(shard) == 0 {
 		return fmt.Sprintf("%s-*", table)
 	} else {
-		return fmt.Sprintf("%s-%s-*", table, accountId)
+		return fmt.Sprintf("%s-%s-*", table, shard)
 	}
 }
 
@@ -243,7 +244,7 @@ func (dbs *ElasticStore) List(factory EntityFactory, entityIDs []string, keys ..
 
 	res, err := dbs.tClient.Search().
 		Index(pattern).
-		ExpandWildcards("all").
+		ExpandWildcards(expandwildcard.All).
 		AllowNoIndices(true).
 		Request(req).Do(context.Background())
 	if err != nil {
@@ -465,7 +466,7 @@ func (dbs *ElasticStore) get(pattern, entityID string) ([]byte, string, error) {
 		},
 	}
 
-	res, err := dbs.tClient.Search().Index(pattern).ExpandWildcards("all").Request(req).Do(context.Background())
+	res, err := dbs.tClient.Search().Index(pattern).ExpandWildcards(expandwildcard.All).Request(req).Do(context.Background())
 	if err != nil {
 		return nil, "", ElasticError(err)
 	}

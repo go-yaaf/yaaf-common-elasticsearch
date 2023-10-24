@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
+	"github.com/elastic/go-elasticsearch/v8/typedapi/types/enums/expandwildcard"
 	"time"
 
 	"github.com/elastic/go-elasticsearch/v8/typedapi/core/search"
@@ -44,7 +45,7 @@ func (s *elasticDatastoreQuery) Count(keys ...string) (int64, error) {
 	req := &search.Request{Size: &size, Query: query, Aggregations: agsMap}
 
 	searchObject := s.dbs.tClient.Search().Index(pattern).
-		ExpandWildcards("all").
+		ExpandWildcards(expandwildcard.All).
 		TrackTotalHits("1000000").
 		AllowNoIndices(true).
 		Request(req)
@@ -95,7 +96,7 @@ func (s *elasticDatastoreQuery) Aggregation(field, function string, keys ...stri
 	req := &search.Request{Size: &size, Query: query, Aggregations: map[string]types.Aggregations{"aggs": queryAggregations}}
 
 	searchObject := s.dbs.tClient.Search().Index(pattern).
-		ExpandWildcards("all").
+		ExpandWildcards(expandwildcard.All).
 		Request(req)
 
 	// Log before executing the request
@@ -152,7 +153,7 @@ func (s *elasticDatastoreQuery) GroupAggregation(field, function string, keys ..
 	req := &search.Request{Size: &size, Query: query, Aggregations: map[string]types.Aggregations{"aggs": queryAggregations}}
 
 	searchObject := s.dbs.tClient.Search().Index(pattern).
-		ExpandWildcards("all").
+		ExpandWildcards(expandwildcard.All).
 		Request(req)
 
 	// Log before executing the request
@@ -204,7 +205,7 @@ func (s *elasticDatastoreQuery) Histogram(field, function, timeField string, int
 	req := &search.Request{Size: &size, Query: query, Aggregations: map[string]types.Aggregations{"0": queryAggregations}}
 
 	searchObject := s.dbs.tClient.Search().Index(pattern).
-		ExpandWildcards("all").
+		ExpandWildcards(expandwildcard.All).
 		Request(req)
 
 	// Log before executing the request
@@ -255,7 +256,7 @@ func (s *elasticDatastoreQuery) Histogram2D(field, function, dim, timeField stri
 	req := &search.Request{Size: &size, Query: query, Aggregations: map[string]types.Aggregations{"0": queryAggregations}}
 
 	searchObject := s.dbs.tClient.Search().Index(pattern).
-		ExpandWildcards("all").
+		ExpandWildcards(expandwildcard.All).
 		Request(req)
 
 	// Log before executing the request

@@ -2,6 +2,7 @@ package test
 
 import (
 	"fmt"
+	"strings"
 	"testing"
 	"time"
 )
@@ -54,4 +55,30 @@ func convertTimeDurationToElasticsearchInterval(interval time.Duration) string {
 	}
 
 	return fmt.Sprintf("%dd", interval/(24*time.Hour))
+}
+
+// Resolve index pattern from entity class name
+func TestIndexPatternFromTable(t *testing.T) {
+
+	kys := []string{"onwave-1"}
+	tableName := "usage-{streamId}-{YYYY.MM}"
+	accountId := ""
+	if len(kys) > 0 {
+		accountId = kys[0]
+	}
+	// Custom tables conversion
+	table := tableName
+	idx := strings.Index(table, "-{")
+	if idx > 0 {
+		table = table[0:idx]
+	}
+
+	pattern := ""
+	if len(accountId) == 0 {
+		pattern = fmt.Sprintf("%s-*", table)
+	} else {
+		pattern = fmt.Sprintf("%s-%s-*", table, accountId)
+	}
+
+	fmt.Println(pattern)
 }
