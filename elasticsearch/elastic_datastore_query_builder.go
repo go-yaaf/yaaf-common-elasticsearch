@@ -3,6 +3,7 @@ package elasticsearch
 import (
 	"errors"
 	"fmt"
+	"github.com/go-yaaf/yaaf-common/entity"
 	"strconv"
 	"strings"
 
@@ -219,6 +220,9 @@ func anyToFloat64(v any) (types.Float64, error) {
 		return types.Float64(r), nil
 	}
 	if r, ok := v.(int); ok {
+		return types.Float64(r), nil
+	}
+	if r, ok := v.(entity.Timestamp); ok {
 		return types.Float64(r), nil
 	}
 	if r, ok := v.(string); ok {
