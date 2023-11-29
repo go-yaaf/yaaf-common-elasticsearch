@@ -150,7 +150,7 @@ var queryTerms = map[QueryOperator]func(qf QueryFilter) (*types.Query, bool){
 				val = fmt.Sprintf("%s*", val)
 			}
 			term[qf.GetField()] = types.WildcardQuery{Value: &val}
-			return &types.Query{Wildcard: term}, false
+			return &types.Query{Wildcard: term}, true
 		}
 	},
 	Gt: func(qf QueryFilter) (*types.Query, bool) {
