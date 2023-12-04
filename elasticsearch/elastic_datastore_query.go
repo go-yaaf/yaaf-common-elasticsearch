@@ -143,20 +143,25 @@ func (s *elasticDatastoreQuery) Find(keys ...string) ([]Entity, int64, error) {
 	if err != nil {
 		return nil, 0, err
 	}
-	sort := s.buildSort()
 
 	pattern := indexPattern(s.factory, keys...)
 	size := s.limit
 	from := s.page
 
 	req := &search.Request{Size: &size, From: &from, Query: query}
+	//req.Sort = make([]types.SortCombinations, 0)
+
+	// First, calculate document count (don't use TrackTotalHits)
+	totalHits, er := s.Count(keys...)
+	if er != nil {
+		return nil, 0, er
+	}
 
 	searchObject := s.dbs.tClient.Search().Index(pattern).
 		ExpandWildcards(expandwildcard.All).
 		AllowNoIndices(true).
-		TrackTotalHits("1000000").
-		Sort(sort).
-		Request(req)
+		Request(req).
+		Sort(s.buildSort())
 
 	// Log before executing the request
 	s.logLastQuery(searchObject)
@@ -176,7 +181,7 @@ func (s *elasticDatastoreQuery) Find(keys ...string) ([]Entity, int64, error) {
 		}
 	}
 
-	return result, res.Hits.Total.Value, nil
+	return result, totalHits, nil
 }
 
 // Select is similar to find but with ability to retrieve specific fields
