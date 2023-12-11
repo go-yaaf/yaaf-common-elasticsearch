@@ -47,7 +47,7 @@ func (s *DatastoreQueryTestSuite) TearDownSuite() {
 }
 
 func (s *DatastoreQueryTestSuite) bulkInsertDocuments() {
-	list := GetRandomListOfHeroes(10000)
+	list := GetRandomListOfHeroes(100000)
 	total, err := s.sut.BulkInsert(list)
 	require.NoError(s.T(), err)
 	logger.Info("%d documents added", total)
@@ -99,12 +99,13 @@ func (s *DatastoreQueryTestSuite) listDocuments() {
 
 func (s *DatastoreQueryTestSuite) findDocuments() {
 	entities, total, err := s.sut.Query(NewHero).
-		MatchAll(
-			F("key").Eq("a"),
-		).MatchAny(
-		F("color").Eq("black"),
-		F("color").Eq("white"),
-	).Limit(50).
+		//MatchAll(
+		//	F("key").Eq("a"),
+		//).
+		MatchAny(
+			F("color").Eq("black"),
+			F("color").Eq("white"),
+		).Limit(50).
 		Sort("strength-").
 		Sort("brain-").
 		Find()

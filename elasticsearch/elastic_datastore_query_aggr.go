@@ -26,7 +26,7 @@ func (s *elasticDatastoreQuery) Count(keys ...string) (int64, error) {
 	// agsMap2 := make(map[string]types.Aggregations)
 
 	card := types.NewCardinalityAggregation()
-	field := "id_"
+	field := "id"
 	pre := 40000
 	card.Field = &field
 	card.PrecisionThreshold = &pre
@@ -46,7 +46,6 @@ func (s *elasticDatastoreQuery) Count(keys ...string) (int64, error) {
 
 	searchObject := s.dbs.tClient.Search().Index(pattern).
 		ExpandWildcards(expandwildcard.All).
-		TrackTotalHits("1000000").
 		AllowNoIndices(true).
 		Request(req)
 
@@ -54,7 +53,9 @@ func (s *elasticDatastoreQuery) Count(keys ...string) (int64, error) {
 	if err != nil {
 		return 0, ElasticError(err)
 	}
-	return res.Hits.Total.Value, nil
+
+	agg := res.Aggregations["count"].(*types.CardinalityAggregate)
+	return agg.Value, nil
 }
 
 // Aggregation Execute the query based on the criteria, order and pagination and return the provided aggregation function on the field
