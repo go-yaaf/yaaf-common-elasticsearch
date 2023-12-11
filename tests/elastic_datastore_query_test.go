@@ -76,7 +76,7 @@ func (s *DatastoreQueryTestSuite) removeAllIndices() {
 func (s *DatastoreQueryTestSuite) TestQuery() {
 
 	//s.listDocuments()
-	//s.findDocuments()
+	s.findDocuments()
 	//s.selectDocuments()
 	//s.countDocuments()
 	//s.getDocumentsMap()
@@ -105,8 +105,8 @@ func (s *DatastoreQueryTestSuite) findDocuments() {
 		F("color").Eq("black"),
 		F("color").Eq("white"),
 	).Limit(50).
-		//Sort("strength-").
-		//Sort("brain-").
+		Sort("strength-").
+		Sort("brain-").
 		Find()
 
 	//fmt.Println(s.sut)

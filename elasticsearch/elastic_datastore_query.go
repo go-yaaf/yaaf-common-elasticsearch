@@ -149,7 +149,7 @@ func (s *elasticDatastoreQuery) Find(keys ...string) ([]Entity, int64, error) {
 	from := s.page
 
 	req := &search.Request{Size: &size, From: &from, Query: query}
-	//req.Sort = make([]types.SortCombinations, 0)
+	req.Sort = s.buildSort()
 
 	// First, calculate document count (don't use TrackTotalHits)
 	totalHits, er := s.Count(keys...)
@@ -160,8 +160,8 @@ func (s *elasticDatastoreQuery) Find(keys ...string) ([]Entity, int64, error) {
 	searchObject := s.dbs.tClient.Search().Index(pattern).
 		ExpandWildcards(expandwildcard.All).
 		AllowNoIndices(true).
-		Request(req).
-		Sort(s.buildSort())
+		Request(req)
+	//Sort(s.buildSort())
 
 	// Log before executing the request
 	s.logLastQuery(searchObject)

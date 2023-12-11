@@ -3,6 +3,7 @@ package elasticsearch
 import (
 	"errors"
 	"fmt"
+	"github.com/elastic/go-elasticsearch/v8/typedapi/types/enums/sortorder"
 	"github.com/go-yaaf/yaaf-common/entity"
 	"strconv"
 	"strings"
@@ -15,7 +16,23 @@ import (
 // region Query builders -----------------------------------------------------------------------------------------------
 
 // Build the typedAPI sort phrase which is expected to be comma separated pairs of: <field>:<direction>
-func (s *elasticDatastoreQuery) buildSort() string {
+func (s *elasticDatastoreQuery) buildSort() (result []types.SortCombinations) {
+
+	for _, o := range s.ascOrders {
+		so := types.SortOptions{SortOptions: make(map[string]types.FieldSort)}
+		so.SortOptions[o.(string)] = types.FieldSort{Order: &sortorder.Asc}
+		result = append(result, so)
+	}
+	for _, o := range s.descOrders {
+		so := types.SortOptions{SortOptions: make(map[string]types.FieldSort)}
+		so.SortOptions[o.(string)] = types.FieldSort{Order: &sortorder.Desc}
+		result = append(result, so)
+	}
+	return result
+}
+
+// Build the typedAPI sort phrase which is expected to be comma separated pairs of: <field>:<direction>
+func (s *elasticDatastoreQuery) buildSortOld() string {
 
 	orderList := make([]string, 0)
 	for _, o := range s.ascOrders {
