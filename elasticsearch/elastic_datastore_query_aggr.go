@@ -107,6 +107,9 @@ func (s *elasticDatastoreQuery) Aggregation(field, function string, keys ...stri
 		return 0, ElasticError(err)
 	}
 
+	if len(res.Aggregations) == 0 {
+		return 0, nil
+	}
 	if result, ok := res.Aggregations["aggs"]; !ok {
 		return 0, fmt.Errorf("can't find aggregated value: aggs")
 	} else {
