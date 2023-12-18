@@ -12,6 +12,16 @@ import (
 	. "github.com/go-yaaf/yaaf-common/entity"
 )
 
+type AggFunc int
+
+const (
+	COUNT AggFunc = iota
+	MIN
+	MAX
+	AVG
+	SUM
+)
+
 // region QueryBuilder Execution Methods -------------------------------------------------------------------------------
 
 // Count executes a query based on the criteria, order and pagination
@@ -167,6 +177,9 @@ func (s *elasticDatastoreQuery) GroupAggregation(field, function string, keys ..
 		return result, total, ElasticError(err)
 	}
 
+	if len(res.Aggregations) == 0 {
+		return result, 0, nil
+	}
 	return s.processGroupAggregateResults(res.Aggregations["aggs"])
 }
 
