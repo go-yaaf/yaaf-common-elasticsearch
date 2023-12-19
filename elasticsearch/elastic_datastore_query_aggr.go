@@ -64,6 +64,10 @@ func (s *elasticDatastoreQuery) Count(keys ...string) (int64, error) {
 		return 0, ElasticError(err)
 	}
 
+	if len(res.Aggregations) == 0 {
+		return 0, nil
+	}
+
 	agg := res.Aggregations["count"].(*types.CardinalityAggregate)
 	return agg.Value, nil
 }
