@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	est "github.com/elastic/go-elasticsearch/v8/typedapi/types"
 )
 
 func TestIntervalConvert(t *testing.T) {
@@ -33,7 +35,6 @@ func TestIntervalConvert(t *testing.T) {
 }
 
 func convertTimeDurationToElasticsearchInterval(interval time.Duration) string {
-
 	// Special case: get the time range and select the adaptive interval to provide up to the provided size points
 	if interval == 0 {
 		return ""
@@ -81,4 +82,46 @@ func TestIndexPatternFromTable(t *testing.T) {
 	}
 
 	fmt.Println(pattern)
+}
+
+func TestIfMapIsByValue(t *testing.T) {
+	skipCI(t)
+
+	est.NewNestedQuery()
+
+	groups := make(map[string]*est.Query)
+
+	fields := []string{"group1.field_a", "group1.field_b", "group1.field_c", "group2.field_a", "group2.field_b", "group2.field_c"}
+
+	for _, s := range fields {
+		processOperator(s, groups)
+	}
+	fmt.Println(len(groups))
+}
+
+func processOperator(field string, groups map[string]*est.Query) {
+
+	path := field[0:strings.Index(field, ".")]
+	q, ok := groups[path]
+	if !ok {
+		q = est.NewQuery()
+		q.Nested = est.NewNestedQuery()
+		q.Nested.Path = path
+		q.Nested.Query = &est.Query{
+			Bool: &est.BoolQuery{
+				Must: make([]est.Query, 0),
+			},
+		}
+
+		tq := est.Query{
+			Type: &est.TypeQuery{Value: field},
+		}
+		q.Nested.Query.Bool.Must = append(q.Nested.Query.Bool.Must, tq)
+		groups[path] = q
+	} else {
+		tq := est.Query{
+			Type: &est.TypeQuery{Value: field},
+		}
+		q.Nested.Query.Bool.Must = append(q.Nested.Query.Bool.Must, tq)
+	}
 }

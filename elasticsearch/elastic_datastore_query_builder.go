@@ -58,10 +58,12 @@ func (s *elasticDatastoreQuery) buildQuery() (*types.Query, error) {
 	orQueries := make([]types.Query, 0)
 	notQueries := make([]types.Query, 0)
 
+	groups := make(map[string]*types.Query)
+
 	// Initialize match all (AND) conditions
 	for _, list := range s.allFilters {
 		for _, qf := range list {
-			f, inc := queryTerms[qf.GetOperator()](qf)
+			f, inc := s.processOperator(qf, groups)
 			if f != nil {
 				if inc {
 					andQueries = append(andQueries, *f)
@@ -75,7 +77,7 @@ func (s *elasticDatastoreQuery) buildQuery() (*types.Query, error) {
 	// Initialize match any (OR) conditions
 	for _, list := range s.anyFilters {
 		for _, qf := range list {
-			f, inc := queryTerms[qf.GetOperator()](qf)
+			f, inc := s.processOperator(qf, groups)
 			if f != nil {
 				if inc {
 					orQueries = append(orQueries, *f)
@@ -110,6 +112,50 @@ func (s *elasticDatastoreQuery) buildQuery() (*types.Query, error) {
 		Bool: rootQuery,
 	}
 	return result, nil
+}
+
+// Process query operator, check for nested queries
+func (s *elasticDatastoreQuery) processOperator(qf QueryFilter, groups map[string]*types.Query) (*types.Query, bool) {
+
+	path, nested := s.isNestedField(qf)
+	if !nested {
+		return queryTerms[qf.GetOperator()](qf)
+	}
+
+	f, inc := queryTerms[qf.GetOperator()](qf)
+	if f == nil {
+		return nil, false
+	}
+
+	// In case of nested query, get or create
+	q, ok := groups[path]
+	if !ok {
+		q = types.NewQuery()
+		q.Nested = types.NewNestedQuery()
+		q.Nested.Path = path
+		q.Nested.Query = &types.Query{
+			Bool: &types.BoolQuery{
+				Must: make([]types.Query, 0),
+			},
+		}
+		q.Nested.Query.Bool.Must = append(q.Nested.Query.Bool.Must, *f)
+		groups[path] = q
+	} else {
+		q.Nested.Query.Bool.Must = append(q.Nested.Query.Bool.Must, *f)
+	}
+
+	return q, inc
+}
+
+// If the field is canonical (dot separated), we treat it as a field in a nested document hence, we should build a nested query
+func (s *elasticDatastoreQuery) isNestedField(qf QueryFilter) (path string, result bool) {
+	field := qf.GetField()
+	dotIndex := strings.Index(field, ".")
+	if dotIndex < 0 {
+		return "", false
+	} else {
+		return field[0:dotIndex], true
+	}
 }
 
 // endregion
