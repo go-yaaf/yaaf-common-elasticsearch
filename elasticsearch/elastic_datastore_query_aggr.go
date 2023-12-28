@@ -59,6 +59,8 @@ func (s *elasticDatastoreQuery) Count(keys ...string) (int64, error) {
 		AllowNoIndices(true).
 		Request(req)
 
+	s.logLastQuery(searchObject)
+
 	res, err := searchObject.Do(context.Background())
 	if err != nil {
 		return 0, ElasticError(err)
