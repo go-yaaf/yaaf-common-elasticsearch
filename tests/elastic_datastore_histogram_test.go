@@ -12,20 +12,20 @@ import (
 	"time"
 )
 
-type DatastoreQueryHistogram2DTestSuite struct {
+type DatastoreQueryHistogramTestSuite struct {
 	suite.Suite
 	sut IDatastore
 }
 
 // region Test Suite setup & Teardown ----------------------------------------------------------------------------------
 
-func TestDatastoreQueryHistogram2DTestSuite(t *testing.T) {
+func TestDatastoreQueryHistogramTestSuite(t *testing.T) {
 	skipCI(t)
 	suite.Run(t, new(DatastoreQueryHistogramTestSuite))
 }
 
 // SetupSuite will run once when the test suite begins
-func (s *DatastoreQueryHistogram2DTestSuite) SetupSuite() {
+func (s *DatastoreQueryHistogramTestSuite) SetupSuite() {
 
 	// Create Datastore
 	datastore, err := es.NewElasticStore("")
@@ -39,20 +39,20 @@ func (s *DatastoreQueryHistogram2DTestSuite) SetupSuite() {
 	//s.bulkInsertDocuments()
 }
 
-func (s *DatastoreQueryHistogram2DTestSuite) createEntityIndex() {
+func (s *DatastoreQueryHistogramTestSuite) createEntityIndex() {
 	idxName, err := s.sut.CreateEntityIndex(NewHero, "disney")
 	require.NoError(s.T(), err)
 	fmt.Println(idxName)
 }
 
 // TearDownSuite will be called on test suite completion
-func (s *DatastoreQueryHistogram2DTestSuite) TearDownSuite() {
+func (s *DatastoreQueryHistogramTestSuite) TearDownSuite() {
 
 	//s.removeAllIndices()
 	s.T().Log("Done")
 }
 
-func (s *DatastoreQueryHistogram2DTestSuite) bulkInsertDocuments() {
+func (s *DatastoreQueryHistogramTestSuite) bulkInsertDocuments() {
 	list := GetRandomListOfHeroes(10000)
 	total, err := s.sut.BulkInsert(list)
 	require.NoError(s.T(), err)
@@ -62,7 +62,7 @@ func (s *DatastoreQueryHistogram2DTestSuite) bulkInsertDocuments() {
 	time.Sleep(10 * time.Second)
 }
 
-func (s *DatastoreQueryHistogram2DTestSuite) removeAllIndices() {
+func (s *DatastoreQueryHistogramTestSuite) removeAllIndices() {
 	// List indices
 	indices, err := s.sut.ListIndices("hero-*")
 	require.NoError(s.T(), err)
@@ -79,12 +79,12 @@ func (s *DatastoreQueryHistogram2DTestSuite) removeAllIndices() {
 
 // region Test Query Operations ----------------------------------------------------------------------------------------
 
-func (s *DatastoreQueryHistogram2DTestSuite) TestQuery() {
-	s.countColorHistogram2D()
+func (s *DatastoreQueryHistogramTestSuite) TestQuery() {
+	//s.countColorHistogram2D()
 	//s.countNumHistogram2D()
 }
 
-func (s *DatastoreQueryHistogram2DTestSuite) countColorHistogram2D() {
+func (s *DatastoreQueryHistogramTestSuite) countColorHistogram2D() {
 
 	result, total, err := s.sut.Query(NewHero).
 		MatchAll(F("key").Eq("a")).
@@ -100,7 +100,7 @@ func (s *DatastoreQueryHistogram2DTestSuite) countColorHistogram2D() {
 	}
 }
 
-func (s *DatastoreQueryHistogram2DTestSuite) countNumHistogram2D() {
+func (s *DatastoreQueryHistogramTestSuite) countNumHistogram2D() {
 
 	result, total, err := s.sut.Query(NewHero).
 		MatchAll(F("key").Eq("a")).
@@ -118,44 +118,12 @@ func (s *DatastoreQueryHistogram2DTestSuite) countNumHistogram2D() {
 
 // endregion
 
-/*
-{
-  "aggregations": {
-    "aggs": {
-      "aggregations": {
-        "count": {
-          "aggregations": {
-            "dim": {
-              "terms": {
-                "field": "type"
-              }
-            }
-          },
-          "terms": {
-            "field": "color"
-          }
-        }
-      },
-      "auto_date_histogram": {
-        "buckets": 100,
-        "field": "createdOn"
-      }
-    }
-  },
-  "query": {
-    "bool": {
-      "filter": [
-        {
-          "term": {
-            "key": {
-              "value": "a"
-            }
-          }
-        }
-      ]
-    }
-  },
-  "size": 0
-}
+func TestAggregatedHistogram(t *testing.T) {
+	skipCI(t)
 
-*/
+	// Create Datastore
+	datastore, err := es.NewElasticStore("")
+	require.NoError(t, err)
+
+	datastore.Query(NewHero)
+}

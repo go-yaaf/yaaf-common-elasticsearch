@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types/enums/expandwildcard"
+	"github.com/go-yaaf/yaaf-common/database"
 	"time"
 
 	"github.com/elastic/go-elasticsearch/v8/typedapi/core/search"
@@ -108,6 +109,12 @@ func (s *elasticDatastoreQuery) Aggregation(field, function string, keys ...stri
 		queryAggregations.Cardinality.PrecisionThreshold = &pre
 	default:
 		return 0, fmt.Errorf("aggregation function: %s is not supported", function)
+	}
+
+	// Check for nested field
+	if path, nested := s.isNestedField(database.Filter(field)); nested {
+		queryAggregations.Nested = types.NewNestedAggregation()
+		queryAggregations.Nested.Path = &path
 	}
 
 	req := &search.Request{Size: &size, Query: query, Aggregations: map[string]types.Aggregations{"aggs": queryAggregations}}
@@ -222,6 +229,12 @@ func (s *elasticDatastoreQuery) Histogram(field, function, timeField string, int
 		}
 	}
 
+	// Check for nested field
+	if path, nested := s.isNestedField(database.Filter(field)); nested {
+		queryAggregations.Nested = types.NewNestedAggregation()
+		queryAggregations.Nested.Path = &path
+	}
+
 	// Add sub aggregation:
 	s.addSubAggregation(&queryAggregations, field, function)
 
@@ -271,6 +284,12 @@ func (s *elasticDatastoreQuery) Histogram2D(field, function, dim, timeField stri
 			Buckets: &s.limit,
 			Field:   &timeField,
 		}
+	}
+
+	// Check for nested field
+	if path, nested := s.isNestedField(database.Filter(field)); nested {
+		queryAggregations.Nested = types.NewNestedAggregation()
+		queryAggregations.Nested.Path = &path
 	}
 
 	// Add sub aggregation
