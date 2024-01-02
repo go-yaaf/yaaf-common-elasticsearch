@@ -276,21 +276,6 @@ func (s *elasticDatastoreQuery) Histogram2D(field, function, dim, timeField stri
 	size := 0
 
 	queryAggregations := *types.NewAggregations()
-	if interval > 0 {
-		fixedInterval := s.getInterval(interval)
-		if len(fixedInterval) == 0 {
-			return nil, 0, fmt.Errorf("%v - unsupported interval", interval)
-		}
-		queryAggregations.DateHistogram = &types.DateHistogramAggregation{
-			Field:         &timeField,
-			FixedInterval: &fixedInterval,
-		}
-	} else {
-		queryAggregations.AutoDateHistogram = &types.AutoDateHistogramAggregation{
-			Buckets: &s.limit,
-			Field:   &timeField,
-		}
-	}
 
 	// Check for nested field
 	if path, nested := s.isNestedField(database.Filter(field)); nested {
@@ -304,14 +289,24 @@ func (s *elasticDatastoreQuery) Histogram2D(field, function, dim, timeField stri
 		queryAggregations.Nested.Path = &path
 	}
 
+	timeAgg := *types.NewAggregations()
+
+	if interval > 0 {
+		fixedInterval := s.getInterval(interval)
+		if len(fixedInterval) == 0 {
+			return nil, 0, fmt.Errorf("%v - unsupported interval", interval)
+		}
+		timeAgg.DateHistogram = &types.DateHistogramAggregation{Field: &timeField, FixedInterval: &fixedInterval}
+		//queryAggregations.DateHistogram = &types.DateHistogramAggregation{Field: &timeField, FixedInterval: &fixedInterval}
+	} else {
+		timeAgg.AutoDateHistogram = &types.AutoDateHistogramAggregation{Buckets: &s.limit, Field: &timeField}
+		//queryAggregations.AutoDateHistogram = &types.AutoDateHistogramAggregation{Buckets: &s.limit, Field: &timeField}
+	}
+
 	// Add sub aggregation
-	//s.addGroupAggregation(&queryAggregations, field, function, dim)
+	s.addGroupAggregation(&timeAgg, field, function, dim)
 
-	fieldAgg := types.NewAggregations()
-	fieldAgg.Terms = types.NewTermsAggregation()
-	fieldAgg.Terms.Field = &dim
-
-	queryAggregations.Aggregations[function] = *fieldAgg
+	queryAggregations.Aggregations = map[string]types.Aggregations{"over_time": timeAgg}
 
 	req := &search.Request{Size: &size, Query: query, Aggregations: map[string]types.Aggregations{"0": queryAggregations}}
 
