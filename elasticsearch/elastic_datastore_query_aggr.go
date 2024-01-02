@@ -306,7 +306,7 @@ func (s *elasticDatastoreQuery) Histogram2D(field, function, dim, timeField stri
 	// Add sub aggregation
 	s.addGroupAggregation(&timeAgg, field, function, dim)
 
-	queryAggregations.Aggregations = map[string]types.Aggregations{"over_time": timeAgg}
+	queryAggregations.Aggregations = map[string]types.Aggregations{"nested_agg": timeAgg}
 
 	req := &search.Request{Size: &size, Query: query, Aggregations: map[string]types.Aggregations{"0": queryAggregations}}
 
@@ -518,8 +518,17 @@ func (s *elasticDatastoreQuery) processGroupAggregateBucket(aggregates map[strin
 func (s *elasticDatastoreQuery) processHistogram2DAggregateBucket(aggregate types.Aggregate, aggregationName string) (map[Timestamp]map[any]Tuple[int64, float64], float64, error) {
 
 	result := make(map[Timestamp]map[any]Tuple[int64, float64])
+	docCount := int64(0)
 
-	dha := aggregate.(*types.DateHistogramAggregate)
+	var dha *types.DateHistogramAggregate = nil
+
+	// Check for nested aggregation
+	if agg, ok := aggregate.(*types.NestedAggregate); ok {
+		docCount = agg.DocCount
+		dha = agg.Aggregations["nested_agg"].(*types.DateHistogramAggregate)
+	} else {
+		dha = aggregate.(*types.DateHistogramAggregate)
+	}
 
 	dhb := dha.Buckets.([]types.DateHistogramBucket)
 	for _, b := range dhb {
@@ -528,7 +537,7 @@ func (s *elasticDatastoreQuery) processHistogram2DAggregateBucket(aggregate type
 		}
 	}
 
-	return result, 0, nil
+	return result, float64(docCount), nil
 }
 
 // endregion
