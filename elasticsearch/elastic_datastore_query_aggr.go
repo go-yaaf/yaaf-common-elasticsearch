@@ -235,6 +235,12 @@ func (s *elasticDatastoreQuery) Histogram(field, function, timeField string, int
 		queryAggregations.Nested.Path = &path
 	}
 
+	// Check for nested timeField
+	if path, nested := s.isNestedField(database.Filter(timeField)); nested {
+		queryAggregations.Nested = types.NewNestedAggregation()
+		queryAggregations.Nested.Path = &path
+	}
+
 	// Add sub aggregation:
 	s.addSubAggregation(&queryAggregations, field, function)
 
@@ -288,6 +294,12 @@ func (s *elasticDatastoreQuery) Histogram2D(field, function, dim, timeField stri
 
 	// Check for nested field
 	if path, nested := s.isNestedField(database.Filter(field)); nested {
+		queryAggregations.Nested = types.NewNestedAggregation()
+		queryAggregations.Nested.Path = &path
+	}
+
+	// Check for nested timeField
+	if path, nested := s.isNestedField(database.Filter(timeField)); nested {
 		queryAggregations.Nested = types.NewNestedAggregation()
 		queryAggregations.Nested.Path = &path
 	}
