@@ -305,7 +305,13 @@ func (s *elasticDatastoreQuery) Histogram2D(field, function, dim, timeField stri
 	}
 
 	// Add sub aggregation
-	s.addGroupAggregation(&queryAggregations, field, function, dim)
+	//s.addGroupAggregation(&queryAggregations, field, function, dim)
+
+	fieldAgg := types.NewAggregations()
+	fieldAgg.Terms = types.NewTermsAggregation()
+	fieldAgg.Terms.Field = &dim
+
+	queryAggregations.Aggregations[function] = *fieldAgg
 
 	req := &search.Request{Size: &size, Query: query, Aggregations: map[string]types.Aggregations{"0": queryAggregations}}
 
