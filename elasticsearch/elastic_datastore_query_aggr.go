@@ -13,16 +13,6 @@ import (
 	. "github.com/go-yaaf/yaaf-common/entity"
 )
 
-type AggFunc int
-
-const (
-	COUNT AggFunc = iota
-	MIN
-	MAX
-	AVG
-	SUM
-)
-
 // region QueryBuilder Execution Methods -------------------------------------------------------------------------------
 
 // Count executes a query based on the criteria, order and pagination
@@ -77,7 +67,7 @@ func (s *elasticDatastoreQuery) Count(keys ...string) (int64, error) {
 
 // Aggregation Execute the query based on the criteria, order and pagination and return the provided aggregation function on the field
 // supported functions: count : agv, sum, min, max
-func (s *elasticDatastoreQuery) Aggregation(field, function string, keys ...string) (float64, error) {
+func (s *elasticDatastoreQuery) Aggregation(field string, function database.AggFunc, keys ...string) (float64, error) {
 
 	query, err := s.buildQuery()
 	if err != nil {
@@ -90,19 +80,19 @@ func (s *elasticDatastoreQuery) Aggregation(field, function string, keys ...stri
 	queryAggregations := *types.NewAggregations()
 
 	switch function {
-	case "avg":
+	case database.AVG:
 		queryAggregations.Avg = types.NewAverageAggregation()
 		queryAggregations.Avg.Field = &field
-	case "sum":
+	case database.SUM:
 		queryAggregations.Sum = types.NewSumAggregation()
 		queryAggregations.Sum.Field = &field
-	case "min":
+	case database.MIN:
 		queryAggregations.Min = types.NewMinAggregation()
 		queryAggregations.Min.Field = &field
-	case "max":
+	case database.MAX:
 		queryAggregations.Max = types.NewMaxAggregation()
 		queryAggregations.Max.Field = &field
-	case "count":
+	case database.COUNT:
 		queryAggregations.Cardinality = types.NewCardinalityAggregation()
 		queryAggregations.Cardinality.Field = &field
 		pre := 40000
@@ -157,7 +147,7 @@ func (s *elasticDatastoreQuery) GroupCount(field string, keys ...string) (map[an
 // the data point is a calculation of the provided function on the selected field, each data point includes the number of documents and the calculated value
 // the total is the sum of all calculated values in all the buckets
 // supported functions: count : avg, sum, min, max
-func (s *elasticDatastoreQuery) GroupAggregation(field, function string, keys ...string) (map[any]Tuple[int64, float64], float64, error) {
+func (s *elasticDatastoreQuery) GroupAggregation(field string, function database.AggFunc, keys ...string) (map[any]Tuple[int64, float64], float64, error) {
 
 	result := make(map[any]Tuple[int64, float64])
 	total := float64(0)
@@ -200,7 +190,7 @@ func (s *elasticDatastoreQuery) GroupAggregation(field, function string, keys ..
 // the data point is a calculation of the provided function on the selected field, each data point includes the number of documents and the calculated value
 // the total is the sum of all calculated values in all the buckets
 // supported functions: count : avg, sum, min, max
-func (s *elasticDatastoreQuery) Histogram(field, function, timeField string, interval time.Duration, keys ...string) (map[Timestamp]Tuple[int64, float64], float64, error) {
+func (s *elasticDatastoreQuery) Histogram(field string, function database.AggFunc, timeField string, interval time.Duration, keys ...string) (map[Timestamp]Tuple[int64, float64], float64, error) {
 	result := make(map[Timestamp]Tuple[int64, float64])
 	total := float64(0)
 
@@ -212,46 +202,36 @@ func (s *elasticDatastoreQuery) Histogram(field, function, timeField string, int
 	pattern := indexPattern(s.factory, keys...)
 	size := 0
 
-	queryAggregations := *types.NewAggregations()
-	if interval > 0 {
-		fixedInterval := s.getInterval(interval)
-		if len(fixedInterval) == 0 {
-			return nil, 0, fmt.Errorf("%v - unsupported interval", interval)
-		}
-		queryAggregations.DateHistogram = &types.DateHistogramAggregation{
-			Field:         &timeField,
-			FixedInterval: &fixedInterval,
-		}
-	} else {
-		queryAggregations.AutoDateHistogram = &types.AutoDateHistogramAggregation{
-			Buckets: &s.limit,
-			Field:   &timeField,
-		}
+	queryAggregations, err := s.getIntervalAggregation(timeField, interval)
+	if err != nil {
+		return nil, 0, err
 	}
 
 	// Check for nested field
-	if path, nested := s.isNestedField(database.Filter(field)); nested {
-		queryAggregations.Nested = types.NewNestedAggregation()
-		queryAggregations.Nested.Path = &path
-	}
+	//if path, nested := s.isNestedField(database.Filter(field)); nested {
+	//	queryAggregations.Nested = types.NewNestedAggregation()
+	//	queryAggregations.Nested.Path = &path
+	//}
+
+	var rootAggregation *types.Aggregations = nil
 
 	// Check for nested timeField
 	if path, nested := s.isNestedField(database.Filter(timeField)); nested {
-		queryAggregations.Nested = types.NewNestedAggregation()
-		queryAggregations.Nested.Path = &path
+		rootAggregation = types.NewAggregations()
+		rootAggregation.Nested = types.NewNestedAggregation()
+		rootAggregation.Nested.Path = &path
+
+		s.addSubAggregation(queryAggregations, field, function)
+		rootAggregation.Aggregations = map[string]types.Aggregations{"nested": *queryAggregations}
+	} else {
+		s.addSubAggregation(queryAggregations, field, function)
+		rootAggregation = queryAggregations
 	}
 
-	// Add sub aggregation:
-	s.addSubAggregation(&queryAggregations, field, function)
-
-	req := &search.Request{Size: &size, Query: query, Aggregations: map[string]types.Aggregations{"0": queryAggregations}}
-
-	searchObject := s.dbs.tClient.Search().Index(pattern).
-		ExpandWildcards(expandwildcard.All).
-		Request(req)
-
-	// Log before executing the request
+	req := &search.Request{Size: &size, Query: query, Aggregations: map[string]types.Aggregations{"0": *rootAggregation}}
+	searchObject := s.dbs.tClient.Search().Index(pattern).ExpandWildcards(expandwildcard.All).Request(req)
 	s.logLastQuery(searchObject)
+
 	res, err := searchObject.Do(context.Background())
 	if err != nil {
 		return result, total, ElasticError(err)
@@ -263,7 +243,70 @@ func (s *elasticDatastoreQuery) Histogram(field, function, timeField string, int
 // Histogram2D returns a two-dimensional time series data points based on the time field, supported intervals: Minute, Hour, Day, week, month
 // the data point is a calculation of the provided function on the selected field
 // supported functions: count : avg, sum, min, max
-func (s *elasticDatastoreQuery) Histogram2D(field, function, dim, timeField string, interval time.Duration, keys ...string) (map[Timestamp]map[any]Tuple[int64, float64], float64, error) {
+func (s *elasticDatastoreQuery) Histogram2D(field string, function database.AggFunc, dim, timeField string, interval time.Duration, keys ...string) (map[Timestamp]map[any]Tuple[int64, float64], float64, error) {
+	result := make(map[Timestamp]map[any]Tuple[int64, float64])
+	total := float64(0)
+
+	query, err := s.buildQuery()
+	if err != nil {
+		return result, 0, err
+	}
+
+	pattern := indexPattern(s.factory, keys...)
+	size := 0
+
+	queryAggregations, err := s.getIntervalAggregation(timeField, interval)
+	if err != nil {
+		return nil, 0, err
+	}
+
+	// Check for nested field
+	//if path, nested := s.isNestedField(database.Filter(field)); nested {
+	//	queryAggregations.Nested = types.NewNestedAggregation()
+	//	queryAggregations.Nested.Path = &path
+	//}
+
+	var rootAggregation *types.Aggregations = nil
+
+	// Check for nested timeField
+	if path, nested := s.isNestedField(database.Filter(timeField)); nested {
+		rootAggregation = types.NewAggregations()
+		rootAggregation.Nested = types.NewNestedAggregation()
+		rootAggregation.Nested.Path = &path
+		//s.addSubAggregation(queryAggregations, field, function)
+		s.addGroupAggregation(queryAggregations, field, function, dim)
+		rootAggregation.Aggregations = map[string]types.Aggregations{"nested": *queryAggregations}
+	} else {
+		//s.addSubAggregation(queryAggregations, field, function)
+		s.addGroupAggregation(queryAggregations, field, function, dim)
+		rootAggregation = queryAggregations
+	}
+
+	req := &search.Request{Size: &size, Query: query, Aggregations: map[string]types.Aggregations{"0": *rootAggregation}}
+	searchObject := s.dbs.tClient.Search().Index(pattern).ExpandWildcards(expandwildcard.All).Request(req)
+	s.logLastQuery(searchObject)
+
+	res, err := searchObject.Do(context.Background())
+	if err != nil {
+		return result, total, ElasticError(err)
+	}
+
+	// Add sub aggregation
+	//s.addGroupAggregation(queryAggregations, field, function, dim)
+	//
+	//req := &search.Request{Size: &size, Query: query, Aggregations: map[string]types.Aggregations{"0": *queryAggregations}}
+	//searchObject := s.dbs.tClient.Search().Index(pattern).ExpandWildcards(expandwildcard.All).Request(req)
+	//s.logLastQuery(searchObject)
+	//
+	//res, err := searchObject.Do(context.Background())
+	//if err != nil {
+	//	return result, total, ElasticError(err)
+	//}
+
+	return s.processHistogram2DAggregateBucket(res.Aggregations["0"], string(function))
+}
+
+func (s *elasticDatastoreQuery) NestedHistogram2D(field string, function database.AggFunc, dim, timeField string, interval time.Duration, keys ...string) (map[Timestamp]map[any]Tuple[int64, float64], float64, error) {
 	result := make(map[Timestamp]map[any]Tuple[int64, float64])
 	total := float64(0)
 
@@ -276,12 +319,6 @@ func (s *elasticDatastoreQuery) Histogram2D(field, function, dim, timeField stri
 	size := 0
 
 	queryAggregations := *types.NewAggregations()
-
-	// Check for nested field
-	if path, nested := s.isNestedField(database.Filter(field)); nested {
-		queryAggregations.Nested = types.NewNestedAggregation()
-		queryAggregations.Nested.Path = &path
-	}
 
 	// Check for nested timeField
 	if path, nested := s.isNestedField(database.Filter(timeField)); nested {
@@ -321,12 +358,32 @@ func (s *elasticDatastoreQuery) Histogram2D(field, function, dim, timeField stri
 		return result, total, ElasticError(err)
 	}
 
-	return s.processHistogram2DAggregateBucket(res.Aggregations["0"], function)
+	return s.processHistogram2DAggregateBucket(res.Aggregations["0"], string(function))
 }
 
 // endregion
 
 // region Internal aggregation helper -methods -------------------------------------------------------------------------
+
+func (s *elasticDatastoreQuery) getIntervalAggregation(timeField string, interval time.Duration) (*types.Aggregations, error) {
+	queryAggregations := types.NewAggregations()
+	if interval > 0 {
+		fixedInterval := s.getInterval(interval)
+		if len(fixedInterval) == 0 {
+			return nil, fmt.Errorf("%v - unsupported interval", interval)
+		}
+		queryAggregations.DateHistogram = &types.DateHistogramAggregation{
+			Field:         &timeField,
+			FixedInterval: &fixedInterval,
+		}
+	} else {
+		queryAggregations.AutoDateHistogram = &types.AutoDateHistogramAggregation{
+			Buckets: &s.limit,
+			Field:   &timeField,
+		}
+	}
+	return queryAggregations, nil
+}
 
 // Convert time.Duration interval to Elasticsearch Duration:
 func (s *elasticDatastoreQuery) getInterval(interval time.Duration) string {
@@ -373,46 +430,46 @@ func (s *elasticDatastoreQuery) getAggregatedValue(aggregate types.Aggregate) (f
 }
 
 // Add group by dimension
-func (s *elasticDatastoreQuery) addGroupAggregation(aggregations *types.Aggregations, field, function, dim string) {
+func (s *elasticDatastoreQuery) addGroupAggregation(aggregations *types.Aggregations, field string, function database.AggFunc, dim string) {
 
 	fieldAgg := types.NewAggregations()
 	fieldAgg.Terms = types.NewTermsAggregation()
 	fieldAgg.Terms.Field = &dim
 
 	s.addSubAggregation(fieldAgg, field, function)
-	aggregations.Aggregations[function] = *fieldAgg
+	aggregations.Aggregations[string(function)] = *fieldAgg
 }
 
 // Add sub aggregation to an existing aggregation
-func (s *elasticDatastoreQuery) addSubAggregation(aggregations *types.Aggregations, field, function string) {
+func (s *elasticDatastoreQuery) addSubAggregation(aggregations *types.Aggregations, field string, function database.AggFunc) {
 
 	// Add sub aggregation: sum
-	if function == AGG_SUM {
+	if function == database.SUM {
 		subAgg := types.NewAggregations()
 		subAgg.Sum = types.NewSumAggregation()
 		subAgg.Sum.Field = &field
-		aggregations.Aggregations[function] = *subAgg
+		aggregations.Aggregations[string(function)] = *subAgg
 	}
 	// Add sub aggregation: avg
-	if function == AGG_AVG {
+	if function == database.AVG {
 		subAgg := types.NewAggregations()
 		subAgg.Avg = types.NewAverageAggregation()
 		subAgg.Avg.Field = &field
-		aggregations.Aggregations[function] = *subAgg
+		aggregations.Aggregations[string(function)] = *subAgg
 	}
 	// Add sub aggregation: min
-	if function == AGG_MIN {
+	if function == database.MIN {
 		subAgg := types.NewAggregations()
 		subAgg.Min = types.NewMinAggregation()
 		subAgg.Min.Field = &field
-		aggregations.Aggregations[function] = *subAgg
+		aggregations.Aggregations[string(function)] = *subAgg
 	}
 	// Add sub aggregation: max
-	if function == AGG_MAX {
+	if function == database.MAX {
 		subAgg := types.NewAggregations()
 		subAgg.Max = types.NewMaxAggregation()
 		subAgg.Max.Field = &field
-		aggregations.Aggregations[function] = *subAgg
+		aggregations.Aggregations[string(function)] = *subAgg
 	}
 }
 
@@ -440,6 +497,9 @@ func (s *elasticDatastoreQuery) processHistogramAggregateResults(aggregate types
 				}
 			}
 		}
+	case *types.NestedAggregate:
+		agg := tr.Aggregations["nested"]
+		return s.processHistogramAggregateResults(agg)
 	}
 
 	return result, total, nil
@@ -518,26 +578,27 @@ func (s *elasticDatastoreQuery) processGroupAggregateBucket(aggregates map[strin
 func (s *elasticDatastoreQuery) processHistogram2DAggregateBucket(aggregate types.Aggregate, aggregationName string) (map[Timestamp]map[any]Tuple[int64, float64], float64, error) {
 
 	result := make(map[Timestamp]map[any]Tuple[int64, float64])
-	docCount := int64(0)
+	docCount := float64(0)
 
 	var dha *types.DateHistogramAggregate = nil
 
 	// Check for nested aggregation
 	if agg, ok := aggregate.(*types.NestedAggregate); ok {
-		docCount = agg.DocCount
-		dha = agg.Aggregations["nested_agg"].(*types.DateHistogramAggregate)
+		dha = agg.Aggregations["nested"].(*types.DateHistogramAggregate)
+		return result, docCount, nil
 	} else {
 		dha = aggregate.(*types.DateHistogramAggregate)
 	}
 
 	dhb := dha.Buckets.([]types.DateHistogramBucket)
 	for _, b := range dhb {
-		if dp, _, err := s.processGroupAggregateResults(b.Aggregations[aggregationName]); err == nil {
+		if dp, cnt, err := s.processGroupAggregateResults(b.Aggregations[aggregationName]); err == nil {
 			result[Timestamp(b.Key)] = dp
+			docCount += cnt
 		}
 	}
 
-	return result, float64(docCount), nil
+	return result, docCount, nil
 }
 
 // endregion

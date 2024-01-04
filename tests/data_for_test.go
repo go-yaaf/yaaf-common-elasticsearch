@@ -117,3 +117,22 @@ var list_of_heroes = []Entity{
 }
 
 // endregion
+
+// region Event Test Model --------------------------------------------------------------------------------------------
+type Event struct {
+	BaseEntity
+	AccountId string `json:"accountId"` // Account id
+	StreamId  string `json:"streamId"`  // Stream id
+	DeviceId  string `json:"deviceId"`  // Device id
+}
+
+func (s *Event) TABLE() string { return "event" }
+func (s *Event) NAME() string  { return s.Id }
+func (s *Event) KEY() string   { return s.AccountId }
+
+// NewEvent is a factory method to create new instance
+func NewEvent() Entity {
+	return &Event{BaseEntity: BaseEntity{CreatedOn: Now(), UpdatedOn: Now(), Id: IDN()}}
+}
+
+// endregion

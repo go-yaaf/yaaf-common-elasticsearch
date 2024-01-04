@@ -173,11 +173,15 @@ func (s *elasticDatastoreQuery) getRangeFilter() (types.Query, error) {
 	drq.Format = &format
 
 	rangeQuery[s.rangeField] = drq
-	rangeFilter := types.Query{
-		Range: rangeQuery,
-	}
+	if path, nested := s.isNestedField(F(s.rangeField)); nested {
+		nestedQuery := types.NewNestedQuery()
+		nestedQuery.Path = path
+		nestedQuery.Query = &types.Query{Range: rangeQuery}
+		return types.Query{Nested: nestedQuery}, nil
+	} else {
 
-	return rangeFilter, nil
+		return types.Query{Range: rangeQuery}, nil
+	}
 }
 
 // endregion
