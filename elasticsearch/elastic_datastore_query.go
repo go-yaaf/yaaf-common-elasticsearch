@@ -146,7 +146,12 @@ func (s *elasticDatastoreQuery) Find(keys ...string) ([]Entity, int64, error) {
 
 	pattern := indexPattern(s.factory, keys...)
 	size := s.limit
-	from := s.page
+
+	page := s.page - 1
+	if page < 0 {
+		page = 0
+	}
+	from := page * s.limit
 
 	req := &search.Request{Size: &size, From: &from, Query: query}
 	req.Sort = s.buildSort()
