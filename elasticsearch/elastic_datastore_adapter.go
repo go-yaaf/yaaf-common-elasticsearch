@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types/enums/expandwildcard"
 	"net/http"
+	"net/url"
 	"os"
 	"strconv"
 	"strings"
@@ -94,19 +95,23 @@ func indexName(table string, keys ...string) string {
 }
 
 // NewElasticStore factory method for elasticsearch data store
-func NewElasticStore(URI string) (IDatastore, error) {
+func NewElasticStore(URI string) (db IDatastore, err error) {
 
 	// Get list of hosts
-	hosts := getHosts(URI)
+	hosts := getHostsFromEnvironment()
+	user := ""
+	pwd := ""
+
 	if len(hosts) == 0 {
-		return nil, errors.New("no hosts found")
+		hosts, user, pwd, err = parseElasticUrl(URI)
 	}
-	url := hosts[0]
 
 	// Retry backoff
 	retryBackoff := backoff.NewExponentialBackOff()
 	clientConfig := elastic.Config{
 		Addresses: hosts,
+		Username:  user,
+		Password:  pwd,
 
 		// Retry on 429 TooManyRequests statuses
 		RetryOnStatus: []int{502, 503, 504, 429},
@@ -123,18 +128,18 @@ func NewElasticStore(URI string) (IDatastore, error) {
 		MaxRetries: 5,
 	}
 
-	dataStore := &ElasticStore{url: url, URI: URI}
+	dataStore := &ElasticStore{url: hosts[0], URI: URI}
 
 	// Get es tClient for bulk operations
-	if esClient, err := elastic.NewClient(clientConfig); err != nil {
-		return nil, err
+	if esClient, er := elastic.NewClient(clientConfig); er != nil {
+		return nil, er
 	} else {
 		dataStore.esClient = esClient
 	}
 
 	// Get es tClient for bulk operations
-	if typedClient, err := elastic.NewTypedClient(clientConfig); err != nil {
-		return nil, err
+	if typedClient, er := elastic.NewTypedClient(clientConfig); er != nil {
+		return nil, er
 	} else {
 		dataStore.tClient = typedClient
 	}
@@ -142,7 +147,7 @@ func NewElasticStore(URI string) (IDatastore, error) {
 }
 
 // Get elasticsearch hosts
-func getHosts(URI string) []string {
+func getHostsFromEnvironment() []string {
 
 	result := make([]string, 0)
 
@@ -158,14 +163,41 @@ func getHosts(URI string) []string {
 		}
 	}
 
+	return result
+}
+
+// Get elasticsearch hosts
+func parseElasticUrl(URI string) (hosts []string, user string, pwd string, error error) {
+
+	uri, err := url.Parse(strings.TrimSpace(URI))
+	if err != nil {
+		return nil, "", "", err
+	}
+
+	hostUrl := ""
+	host := uri.Host
+	schema := strings.ToLower(uri.Scheme)
+
+	if uri.User != nil {
+		user = uri.User.Username()
+		pwd, _ = uri.User.Password()
+	}
+
 	// If not found, try
-	if strings.HasPrefix(URI, "elastic://") {
-		host := strings.ReplaceAll(URI, "elastic://", "http://")
-		return []string{host}
+	if strings.HasPrefix(schema, "elastics") {
+		hostUrl = fmt.Sprintf("https://%s", host)
+	} else if strings.HasPrefix(schema, "elastic") {
+		hostUrl = fmt.Sprintf("http://%s", host)
+	} else if strings.HasPrefix(schema, "https") {
+		hostUrl = fmt.Sprintf("https://%s", host)
+	} else if strings.HasPrefix(schema, "http") {
+		hostUrl = fmt.Sprintf("http://%s", host)
+	} else {
+		return nil, "", "", fmt.Errorf("unsupported elasticsearch schema: %s", schema)
 	}
 
 	// If not found, try localhost
-	return []string{"http://localhost:9200"}
+	return []string{hostUrl}, user, pwd, nil
 }
 
 // endregion
