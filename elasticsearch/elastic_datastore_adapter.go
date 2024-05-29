@@ -74,7 +74,7 @@ func indexPatternFromTable(tableName string, keys ...string) (pattern string) {
 }
 
 // Resolve index name from entity class name
-// Replace templates: {{accountId}}, {{year}}, {{month}}
+// Replace templates: {accountId}, {year}, {month}, {YYYY.MM}
 func indexName(table string, keys ...string) string {
 
 	accountId := ""
@@ -82,14 +82,20 @@ func indexName(table string, keys ...string) string {
 		accountId = keys[0]
 	}
 
-	// Replace templates: {{accountId}}
-	index := strings.Replace(table, "{{accountId}}", accountId, -1)
+	// Replace templates: {accountId}
+	index := strings.Replace(table, "{accountId}", accountId, -1)
 
-	// Replace templates: {{year}}
-	index = strings.Replace(index, "{{year}}", time.Now().Format("2006"), -1)
+	// Replace templates: {year}
+	index = strings.Replace(index, "{year}", time.Now().Format("2006"), -1)
 
-	// Replace templates: {{month}}
-	index = strings.Replace(index, "{{month}}", time.Now().Format("01"), -1)
+	// Replace templates: {month}
+	index = strings.Replace(index, "{month}", time.Now().Format("01"), -1)
+
+	// Replace templates: {YYYY}
+	index = strings.Replace(index, "{YYYY}", time.Now().Format("2006"), -1)
+
+	// Replace templates: {MM}
+	index = strings.Replace(index, "{MM}", time.Now().Format("01"), -1)
 
 	return index
 }
