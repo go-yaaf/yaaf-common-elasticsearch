@@ -27,7 +27,8 @@ func TestDatastoreAdapterSuite(t *testing.T) {
 func (s *DatastoreAdapterTestSuite) SetupSuite() {
 
 	// Create Datastore
-	datastore, err := es.NewElasticStore("")
+	uri := "elastic://localhost:9200"
+	datastore, err := es.NewElasticStore(uri)
 	require.NoError(s.T(), err)
 	s.sut = datastore
 
@@ -44,18 +45,52 @@ func (s *DatastoreAdapterTestSuite) TearDownSuite() {
 
 func (s *DatastoreAdapterTestSuite) TestInsertDocuments() {
 
-	//s.insertDocuments()
+	s.insertDocuments()
+	s.countDocuments()
+	s.countWBDocuments()
 	//s.existsDocument("25")
 	//s.getDocument("24")
 	//s.listDocument([]string{"12", "14", "16", "18", "20", "22", "24", "26"})
 	//s.crudDocument()
-	s.setDocumentFields()
+	//s.setDocumentFields()
 }
 
 func (s *DatastoreAdapterTestSuite) insertDocuments() {
 	total, err := s.sut.BulkInsert(list_of_heroes)
 	require.NoError(s.T(), err)
 	logger.Info("%d documents added", total)
+}
+
+func (s *DatastoreAdapterTestSuite) countDocuments() {
+	total, err := s.sut.Query(NewHero).Count()
+	require.NoError(s.T(), err)
+	logger.Info("%d documents count", total)
+}
+
+func (s *DatastoreAdapterTestSuite) countWBDocuments() {
+	total, err := s.sut.Query(NewHero).
+		MatchAny(
+			F("color").Eq("white"),
+		).
+		Count()
+	require.NoError(s.T(), err)
+	logger.Info("%d white documents count", total)
+
+	total, err = s.sut.Query(NewHero).
+		MatchAny(
+			F("color").Eq("red"),
+		).
+		Count()
+	require.NoError(s.T(), err)
+	logger.Info("%d red documents count", total)
+
+	total, err = s.sut.Query(NewHero).
+		MatchAny(
+			F("color").Eq("red"),
+			F("color").Eq("white")).
+		Count()
+	require.NoError(s.T(), err)
+	logger.Info("%d red & white documents count", total)
 }
 
 func (s *DatastoreAdapterTestSuite) existsDocument(docId string) {

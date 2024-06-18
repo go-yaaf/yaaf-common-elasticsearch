@@ -2,16 +2,23 @@ package elasticsearch
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types/enums/expandwildcard"
 	"github.com/go-yaaf/yaaf-common/database"
+	"strings"
 	"time"
 
 	"github.com/elastic/go-elasticsearch/v8/typedapi/core/search"
 	. "github.com/go-yaaf/yaaf-common/entity"
 )
+
+// Parse the response
+type countResponse struct {
+	Count int `json:"count"`
+}
 
 // region QueryBuilder Execution Methods -------------------------------------------------------------------------------
 
@@ -24,7 +31,53 @@ func (s *elasticDatastoreQuery) Count(keys ...string) (int64, error) {
 		return 0, err
 	}
 
-	// agsMap2 := make(map[string]types.Aggregations)
+	pattern := indexPattern(s.factory, keys...)
+	fmt.Println(pattern)
+
+	queryStr := ""
+
+	req := &search.Request{Query: query}
+
+	if bytes, er := json.Marshal(req); er != nil {
+		return 0, ElasticError(er)
+	} else {
+		queryStr = string(bytes)
+	}
+
+	res, err := s.dbs.esClient.Count(
+		s.dbs.esClient.Count.WithContext(context.Background()),
+		s.dbs.esClient.Count.WithIndex(pattern),
+		s.dbs.esClient.Count.WithExpandWildcards("all"),
+		s.dbs.esClient.Count.WithBody(strings.NewReader(queryStr)),
+	)
+	if err != nil {
+		return 0, ElasticError(err)
+	}
+
+	defer func() {
+		_ = res.Body.Close()
+	}()
+
+	if res.IsError() {
+		return 0, ElasticError(fmt.Errorf("%s: %s", res.Status(), res.String()))
+	}
+
+	var cr countResponse
+	if err = json.NewDecoder(res.Body).Decode(&cr); err != nil {
+		return 0, ElasticError(fmt.Errorf("error parsing the response body: %s", err))
+	}
+
+	return int64(cr.Count), nil
+}
+
+// CountOld executes a query based on the criteria, order and pagination
+// Returns only the count of matching rows
+func (s *elasticDatastoreQuery) CountOld(keys ...string) (int64, error) {
+
+	query, err := s.buildQuery()
+	if err != nil {
+		return 0, err
+	}
 
 	card := types.NewCardinalityAggregation()
 	field := "id"

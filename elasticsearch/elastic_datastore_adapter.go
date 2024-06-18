@@ -175,6 +175,10 @@ func getHostsFromEnvironment() []string {
 // Get elasticsearch hosts
 func parseElasticUrl(URI string) (hosts []string, user string, pwd string, error error) {
 
+	if len(URI) == 0 {
+		URI = "elastic://localhost:9200"
+	}
+
 	uri, err := url.Parse(strings.TrimSpace(URI))
 	if err != nil {
 		return nil, "", "", err

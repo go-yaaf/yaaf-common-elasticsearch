@@ -20,7 +20,7 @@ type Hero struct {
 	Brain    float64 `json:"brain"`    // Strength (1..100)
 }
 
-func (a *Hero) TABLE() string { return "hero-{{accountId}}-{{year}}.{{month}}" }
+func (a *Hero) TABLE() string { return "hero-{accountId}-{year}.{month}" }
 func (a *Hero) NAME() string  { return a.Name }
 func (a *Hero) KEY() string   { return a.Key }
 
@@ -39,6 +39,7 @@ func NewHero() Entity {
 func NewHero1(id string, num int, name, typ, color string) Entity {
 	return &Hero{
 		BaseEntity: BaseEntity{Id: id, CreatedOn: Now(), UpdatedOn: Now()},
+		Key:        "m",
 		Num:        num,
 		Name:       name,
 		Type:       typ,
@@ -114,6 +115,7 @@ var list_of_heroes = []Entity{
 	NewHero1("28", 28, "Wolverine Man", "iota", "green"),
 	NewHero1("29", 29, "Wonder Woman", "sigma", "blue"),
 	NewHero1("30", 30, "X Man", "alpha", "yellow"),
+	NewHero1("31", 27, "The Moory", "iota", "red"),
 }
 
 // endregion
