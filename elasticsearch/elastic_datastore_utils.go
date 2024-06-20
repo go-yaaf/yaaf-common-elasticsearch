@@ -139,10 +139,24 @@ func ElasticError(err error) error {
 		return nil
 	}
 
-	if ee, ok := err.(*types.ElasticsearchError); ok {
-		reason := ee.ErrorCause.CausedBy.Reason
-		return errors.New(*reason)
+	var ee *types.ElasticsearchError
+	if errors.As(err, &ee) {
+		if len(ee.ErrorCause.RootCause) > 0 {
+			rootCause := ee.ErrorCause.RootCause[0]
+			if rootCause.Reason != nil {
+				return errors.New(*rootCause.Reason)
+			} else {
+				return ee
+			}
+		} else {
+			if ee.ErrorCause.Reason != nil {
+				return errors.New(*ee.ErrorCause.Reason)
+			} else {
+				return ee
+			}
+		}
 	} else {
 		return err
 	}
+
 }
