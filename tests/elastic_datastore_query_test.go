@@ -36,7 +36,7 @@ func (s *DatastoreQueryTestSuite) SetupSuite() {
 	require.NoError(s.T(), err)
 
 	//s.createEntityIndex()
-	//s.bulkInsertDocuments()
+	s.bulkInsertDocuments()
 }
 
 // TearDownSuite will be called on test suite completion
@@ -76,7 +76,8 @@ func (s *DatastoreQueryTestSuite) removeAllIndices() {
 func (s *DatastoreQueryTestSuite) TestQuery() {
 
 	//s.listDocuments()
-	s.findDocuments()
+	//s.findDocuments()
+	s.findDocumentsIn()
 	//s.selectDocuments()
 	//s.countDocuments()
 	//s.getDocumentsMap()
@@ -111,6 +112,21 @@ func (s *DatastoreQueryTestSuite) findDocuments() {
 		Find()
 
 	//fmt.Println(s.sut)
+
+	require.NoError(s.T(), err)
+	fmt.Println("Total Documents:", total)
+	for _, ent := range entities {
+		fmt.Println(ent)
+	}
+}
+
+func (s *DatastoreQueryTestSuite) findDocumentsIn() {
+
+	searchColors := []any{"black", "white", "red", "green", "blue"}
+	entities, total, err := s.sut.Query(NewHero).Filter(F("color").In(searchColors...)).
+		Sort("strength-").
+		Sort("brain-").
+		Find()
 
 	require.NoError(s.T(), err)
 	fmt.Println("Total Documents:", total)

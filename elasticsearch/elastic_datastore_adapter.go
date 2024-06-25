@@ -458,8 +458,8 @@ func (dbs *ElasticStore) CreateEntityIndex(factory EntityFactory, key string) (s
 		return "", err
 	}
 	tmplName := idxName
-	if strings.Contains(tmplName, "{{") {
-		idx := strings.Index(tmplName, "{{")
+	if strings.Contains(tmplName, "{") {
+		idx := strings.Index(tmplName, "{")
 		tmplName = fmt.Sprintf("%s", tmplName[:idx])
 	}
 

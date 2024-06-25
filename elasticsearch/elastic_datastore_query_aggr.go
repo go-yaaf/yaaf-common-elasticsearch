@@ -70,54 +70,6 @@ func (s *elasticDatastoreQuery) Count(keys ...string) (int64, error) {
 	return int64(cr.Count), nil
 }
 
-// CountOld executes a query based on the criteria, order and pagination
-// Returns only the count of matching rows
-func (s *elasticDatastoreQuery) CountOld(keys ...string) (int64, error) {
-
-	query, err := s.buildQuery()
-	if err != nil {
-		return 0, err
-	}
-
-	card := types.NewCardinalityAggregation()
-	field := "id"
-	pre := 40000
-	card.Field = &field
-	card.PrecisionThreshold = &pre
-
-	ags := types.Aggregations{
-		Cardinality: card,
-		Filter:      nil,
-		Filters:     nil,
-	}
-
-	agsMap := map[string]types.Aggregations{"count": ags}
-
-	pattern := indexPattern(s.factory, keys...)
-	size := 0
-
-	req := &search.Request{Size: &size, Query: query, Aggregations: agsMap}
-
-	searchObject := s.dbs.tClient.Search().Index(pattern).
-		ExpandWildcards(expandwildcard.All).
-		AllowNoIndices(true).
-		Request(req)
-
-	s.logLastQuery(searchObject)
-
-	res, err := searchObject.Do(context.Background())
-	if err != nil {
-		return 0, ElasticError(err)
-	}
-
-	if len(res.Aggregations) == 0 {
-		return 0, nil
-	}
-
-	agg := res.Aggregations["count"].(*types.CardinalityAggregate)
-	return agg.Value, nil
-}
-
 // Aggregation Execute the query based on the criteria, order and pagination and return the provided aggregation function on the field
 // supported functions: count : agv, sum, min, max
 func (s *elasticDatastoreQuery) Aggregation(field string, function database.AggFunc, keys ...string) (float64, error) {
@@ -216,6 +168,7 @@ func (s *elasticDatastoreQuery) GroupAggregation(field string, function database
 	queryAggregations := *types.NewAggregations()
 	queryAggregations.Terms = types.NewTermsAggregation()
 	queryAggregations.Terms.Field = &field
+	queryAggregations.Terms.Size = &s.limit
 
 	// Add sub aggregation: sum
 	s.addSubAggregation(&queryAggregations, field, function)

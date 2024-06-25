@@ -31,23 +31,18 @@ func (s *elasticDatastoreQuery) buildSort() (result []types.SortCombinations) {
 	return result
 }
 
-// Build the typedAPI sort phrase which is expected to be comma separated pairs of: <field>:<direction>
-func (s *elasticDatastoreQuery) buildSortOld() string {
-
-	orderList := make([]string, 0)
-	for _, o := range s.ascOrders {
-		order := fmt.Sprintf("%s:asc", o.(string))
-		orderList = append(orderList, order)
-	}
-	for _, o := range s.descOrders {
-		order := fmt.Sprintf("%s:desc", o.(string))
-		orderList = append(orderList, order)
-	}
-	return strings.Join(orderList, ",")
-}
-
 // Build the typedAPI query object
 func (s *elasticDatastoreQuery) buildQuery() (*types.Query, error) {
+
+	// If there is a single filter, no need for bool query
+	if qf, _ := s.getSingleFilter(); qf != nil {
+		query, inc := queryTerms[qf.GetOperator()](qf)
+		if inc {
+			return query, nil
+		} else {
+			return &types.Query{Bool: &types.BoolQuery{MustNot: []types.Query{*query}}}, nil
+		}
+	}
 
 	rootQuery := &types.BoolQuery{
 		Filter:  make([]types.Query, 0),
@@ -112,6 +107,26 @@ func (s *elasticDatastoreQuery) buildQuery() (*types.Query, error) {
 		Bool: rootQuery,
 	}
 	return result, nil
+}
+
+// Get filter only if there is one single filter
+func (s *elasticDatastoreQuery) getSingleFilter() (QueryFilter, error) {
+	list := make([]QueryFilter, 0)
+	for _, filters := range s.allFilters {
+		for _, qf := range filters {
+			list = append(list, qf)
+		}
+	}
+	for _, filters := range s.anyFilters {
+		for _, qf := range filters {
+			list = append(list, qf)
+		}
+	}
+	if len(list) == 1 {
+		return list[0], nil
+	} else {
+		return nil, errors.New("more than one filter found")
+	}
 }
 
 // Process query operator, check for nested queries
