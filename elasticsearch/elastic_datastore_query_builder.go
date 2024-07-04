@@ -35,7 +35,7 @@ func (s *elasticDatastoreQuery) buildSort() (result []types.SortCombinations) {
 func (s *elasticDatastoreQuery) buildQuery() (*types.Query, error) {
 
 	// If there is a single filter, no need for bool query
-	if qf, _ := s.getSingleFilter(); qf != nil {
+	if qf, _ := s.getSingleFilter(); qf != nil && len(s.rangeField) == 0 {
 		query, inc := queryTerms[qf.GetOperator()](qf)
 		if inc {
 			return query, nil
