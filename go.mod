@@ -5,13 +5,15 @@ go 1.20
 require (
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/elastic/go-elasticsearch/v8 v8.10.1
+	github.com/elastic/elastic-transport-go/v8 v8.5.0 // indirect
+	github.com/go-yaaf/yaaf-common v1.2.108
 	github.com/go-yaaf/yaaf-common v1.2.110
 	github.com/stretchr/testify v1.9.0
 )
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/elastic/elastic-transport-go/v8 v8.6.0 // indirect
+	//github.com/elastic/elastic-transport-go/v8 v8.6.0 // indirect
 	github.com/go-logr/logr v1.4.1 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/golang-jwt/jwt/v5 v5.2.1 // indirect
