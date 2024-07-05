@@ -538,11 +538,18 @@ func (dbs *ElasticStore) exists(pattern, entityID string) (bool, error) {
 // region Datastore native operations ----------------------------------------------------------------------------------
 
 // ExecuteQuery Execute native KQL query
-func (dbs *ElasticStore) ExecuteQuery(query string, args ...any) ([]Json, error) {
+func (dbs *ElasticStore) ExecuteQuery(source string, query string, args ...any) ([]Json, error) {
 	// TODO: use template engine to inject arguments into query placeholders
 
 	r := strings.NewReader(query)
-	res, err := dbs.tClient.Search().Raw(r).Do(context.Background())
+
+	searchAction := dbs.tClient.Search().Raw(r)
+
+	if len(source) > 0 {
+		searchAction.Index(source)
+	}
+
+	res, err := searchAction.Do(context.Background())
 	if err != nil {
 		return nil, ElasticError(err)
 	}

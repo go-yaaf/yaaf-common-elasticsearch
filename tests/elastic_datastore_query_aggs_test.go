@@ -221,7 +221,7 @@ func (s *DatastoreQueryAggregationsTestSuite) nativeQuery() {
 
 	kql := `{"aggregations":{"0":{"aggregations":{"sum":{"sum":{"field":"brain"}}},"date_histogram":{"field":"createdOn","fixed_interval":"1d"}}},"query":{"bool":{"filter":[{"term":{"key":{"value":"a"}}}]}},"size":0}`
 
-	res, err := s.sut.ExecuteQuery(kql)
+	res, err := s.sut.ExecuteQuery("", kql)
 	require.NoError(s.T(), err)
 
 	require.NotNilf(s.T(), res, "result is empty")
