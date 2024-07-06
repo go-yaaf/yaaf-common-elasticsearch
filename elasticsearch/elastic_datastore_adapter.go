@@ -543,13 +543,11 @@ func (dbs *ElasticStore) ExecuteQuery(source string, query string, args ...any) 
 
 	r := strings.NewReader(query)
 
-	searchAction := dbs.tClient.Search().Raw(r)
-
-	if len(source) > 0 {
-		searchAction.Index(source)
+	if len(source) == 0 {
+		source = "*"
 	}
 
-	res, err := searchAction.Do(context.Background())
+	res, err := dbs.tClient.Search().Index(source).Raw(r).Do(context.Background())
 	if err != nil {
 		return nil, ElasticError(err)
 	}

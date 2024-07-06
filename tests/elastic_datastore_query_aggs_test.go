@@ -219,7 +219,9 @@ func (s *DatastoreQueryAggregationsTestSuite) avgHistogram() {
 
 func (s *DatastoreQueryAggregationsTestSuite) nativeQuery() {
 
-	kql := `{"aggregations":{"0":{"aggregations":{"sum":{"sum":{"field":"brain"}}},"date_histogram":{"field":"createdOn","fixed_interval":"1d"}}},"query":{"bool":{"filter":[{"term":{"key":{"value":"a"}}}]}},"size":0}`
+	//kql := `{"aggregations":{"0":{"aggregations":{"sum":{"sum":{"field":"brain"}}},"date_histogram":{"field":"createdOn","fixed_interval":"1d"}}},"query":{"bool":{"filter":[{"term":{"key":{"value":"a"}}}]}},"size":0}`
+
+	kql := `{"aggregations":{"0":{"aggregations":{"sum":{"sum":{"field":"score"}}},"date_histogram":{"field":"createdOn","fixed_interval":"1d"}}},"query":{"bool":{"filter":[{"term":{"ruleType":{"value":"1"}}}]}},"size":0}`
 
 	res, err := s.sut.ExecuteQuery("", kql)
 	require.NoError(s.T(), err)
