@@ -16,8 +16,6 @@ func TestMigration(t *testing.T) {
 	// Create Datastore
 	uri := "elastic://localhost:9200"
 
-	//uri := "https://elastic:QmXlAFS8zFq6choPapgZSkFT@4439a02fb1bd41c591943400267eb822.europe-west2.gcp.elastic-cloud.com:443"
-
 	datastore, err := es.NewElasticStore(uri)
 	require.NoError(t, err)
 	err = datastore.Ping(5, 2)
