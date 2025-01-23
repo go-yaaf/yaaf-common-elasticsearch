@@ -1,11 +1,11 @@
 module github.com/go-yaaf/yaaf-common-elasticsearch
 
-go 1.20
+go 1.22
 
 require (
 	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/elastic/go-elasticsearch/v8 v8.10.1 // Do not upgrade, keep version 8.10.1 due to breaking changes
-	github.com/go-yaaf/yaaf-common v1.2.112
+	github.com/go-yaaf/yaaf-common v1.2.134
 	github.com/stretchr/testify v1.9.0
 )
 
