@@ -235,6 +235,19 @@ var queryTerms = map[QueryOperator]func(qf QueryFilter) (*types.Query, bool){
 			return &types.Query{Wildcard: term}, true
 		}
 	},
+	NotLike: func(qf QueryFilter) (*types.Query, bool) {
+		if values := qf.GetValues(); len(values) == 0 {
+			return nil, true
+		} else {
+			term := make(map[string]types.WildcardQuery)
+			val := qf.GetStringValue(0)
+			if strings.Contains(val, "*") {
+				val = fmt.Sprintf("%s*", val)
+			}
+			term[qf.GetField()] = types.WildcardQuery{Value: &val}
+			return &types.Query{Wildcard: term}, false
+		}
+	},
 	Gt: func(qf QueryFilter) (*types.Query, bool) {
 		if values := qf.GetValues(); len(values) == 0 {
 			return nil, true
@@ -287,10 +300,11 @@ var queryTerms = map[QueryOperator]func(qf QueryFilter) (*types.Query, bool){
 			}
 		}
 	},
-	In:       include,
-	NotIn:    notInclude,
-	Between:  between,
-	Contains: contains,
+	In:          include,
+	NotIn:       notInclude,
+	Between:     between,
+	Contains:    contains,
+	NotContains: notContains,
 }
 
 // Convert value to float64
@@ -367,6 +381,20 @@ func contains(qf QueryFilter) (*types.Query, bool) {
 	tsm[qf.GetField()] = tsq
 
 	return &types.Query{TermsSet: tsm}, true
+}
+
+// Build not contains query
+func notContains(qf QueryFilter) (*types.Query, bool) {
+	values := qf.GetValues()
+	if len(values) == 0 {
+		return nil, true
+	}
+
+	tsm := make(map[string]types.TermsSetQuery)
+	tsq := types.TermsSetQuery{Terms: []string{qf.GetStringValue(0)}}
+	tsm[qf.GetField()] = tsq
+
+	return &types.Query{TermsSet: tsm}, false
 }
 
 // endregion
