@@ -552,15 +552,29 @@ func (dbs *ElasticStore) ExecuteQuery(source string, query string, args ...any) 
 		return nil, ElasticError(err)
 	}
 
-	// If it is aggregated query, return list of aggregations
 	results := make([]Json, 0)
-	result := make(map[string]any)
 
-	for k, v := range res.Aggregations {
-		result[k] = v
+	// If it is aggregated query, return list of aggregations
+	if len(res.Aggregations) > 0 {
+		result := make(map[string]any)
+		for k, v := range res.Aggregations {
+			result[k] = v
+		}
+		results = append(results, result)
+		return results, nil
 	}
-	results = append(results, result)
 
+	// If it is a standard query, iterate over the Hits:
+	if len(res.Hits.Hits) > 0 {
+		for _, hit := range res.Hits.Hits {
+			result := Json{}
+			if jer := json.Unmarshal(hit.Source_, &result); jer != nil {
+				return nil, jer
+			} else {
+				results = append(results, result)
+			}
+		}
+	}
 	return results, nil
 }
 
