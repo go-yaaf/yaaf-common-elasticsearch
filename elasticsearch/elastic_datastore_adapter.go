@@ -25,13 +25,12 @@ import (
 )
 
 const (
-	ES_DOC_NOT_FOUND = "not found"
+	esDocNotFound = "not found"
 
-	AGG_SUM = "sum"
-	AGG_AVG = "avg"
-	AGG_MIN = "min"
-	AGG_MAX = "max"
-	AGG_CNT = "count"
+	aggSUM = "sum"
+	aggAVG = "avg"
+	aggMIN = "min"
+	aggMAX = "max"
 )
 
 // region Elastic store definitions ------------------------------------------------------------------------------------
@@ -162,7 +161,7 @@ func getHostsFromEnvironment() []string {
 	if len(hosts) > 1 {
 		list := strings.Split(hosts, ",")
 		for _, host := range list {
-			result = append(result, fmt.Sprintf("http://%s", host))
+			result = append(result, fmt.Sprintf("https://%s", host))
 		}
 		if len(result) > 0 {
 			return result
@@ -197,11 +196,11 @@ func parseElasticUrl(URI string) (hosts []string, user string, pwd string, error
 	if strings.HasPrefix(schema, "elastics") {
 		hostUrl = fmt.Sprintf("https://%s", host)
 	} else if strings.HasPrefix(schema, "elastic") {
-		hostUrl = fmt.Sprintf("http://%s", host)
+		hostUrl = fmt.Sprintf("https://%s", host)
 	} else if strings.HasPrefix(schema, "https") {
 		hostUrl = fmt.Sprintf("https://%s", host)
 	} else if strings.HasPrefix(schema, "http") {
-		hostUrl = fmt.Sprintf("http://%s", host)
+		hostUrl = fmt.Sprintf("https://%s", host)
 	} else {
 		return nil, "", "", fmt.Errorf("unsupported elasticsearch schema: %s", schema)
 	}
@@ -513,7 +512,7 @@ func (dbs *ElasticStore) get(pattern, entityID string) ([]byte, string, error) {
 		return nil, "", ElasticError(err)
 	}
 	if res.Hits.Total.Value <= 0 {
-		return nil, "", errors.New(ES_DOC_NOT_FOUND)
+		return nil, "", errors.New(esDocNotFound)
 	}
 
 	hit := res.Hits.Hits[0]
@@ -523,7 +522,7 @@ func (dbs *ElasticStore) get(pattern, entityID string) ([]byte, string, error) {
 // Internal Exists checks if entity exists by ID
 func (dbs *ElasticStore) exists(pattern, entityID string) (bool, error) {
 	if _, index, err := dbs.get(pattern, entityID); err != nil {
-		if err.Error() == ES_DOC_NOT_FOUND {
+		if err.Error() == esDocNotFound {
 			return false, nil
 		} else {
 			return false, err
@@ -538,7 +537,7 @@ func (dbs *ElasticStore) exists(pattern, entityID string) (bool, error) {
 // region Datastore native operations ----------------------------------------------------------------------------------
 
 // ExecuteQuery Execute native KQL query
-func (dbs *ElasticStore) ExecuteQuery(source string, query string, args ...any) ([]Json, error) {
+func (dbs *ElasticStore) ExecuteQuery(source string, query string, _ ...any) ([]Json, error) {
 	// TODO: use template engine to inject arguments into query placeholders
 
 	r := strings.NewReader(query)

@@ -13,3 +13,6 @@ This library is the Elasticsearch 8.x concrete implementation of the document st
 $ go get -v -t github.com/go-yaaf/yaaf-common-elasticsearch
 ```
 
+IMPORTANT:
+in the go.mod file, the package: github.com/elastic/go-elasticsearch/v8 must be version: v8.10.1 and not higher
+version since there are breaking changes
