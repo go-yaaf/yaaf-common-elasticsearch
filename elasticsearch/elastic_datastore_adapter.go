@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/elastic/go-elasticsearch/v8/typedapi/types/enums/expandwildcard"
 	"net/http"
 	"net/url"
 	"os"
@@ -17,6 +16,7 @@ import (
 	elastic "github.com/elastic/go-elasticsearch/v8"
 	"github.com/elastic/go-elasticsearch/v8/typedapi/core/search"
 	"github.com/elastic/go-elasticsearch/v8/typedapi/types"
+	"github.com/elastic/go-elasticsearch/v8/typedapi/types/enums/expandwildcard"
 
 	. "github.com/go-yaaf/yaaf-common/database"
 	. "github.com/go-yaaf/yaaf-common/entity"
@@ -27,10 +27,10 @@ import (
 const (
 	esDocNotFound = "not found"
 
-	aggSUM = "sum"
-	aggAVG = "avg"
-	aggMIN = "min"
-	aggMAX = "max"
+	AGG_SUM = "sum"
+	AGG_AVG = "avg"
+	AGG_MIN = "min"
+	AGG_MAX = "max"
 )
 
 // region Elastic store definitions ------------------------------------------------------------------------------------

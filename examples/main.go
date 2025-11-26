@@ -16,13 +16,13 @@ const (
 // Hero is a sample entity
 type Hero struct {
 	entity.BaseEntity
-	Id        string   `json:"id"`
 	Name      string   `json:"name"`
 	SuperPals []string `json:"super_pals"`
 }
 
 func (h *Hero) TABLE() string { return INDEX_NAME }
 
+// NewHero is a factory method for Hero
 func NewHero() entity.Entity {
 	return &Hero{
 		BaseEntity: entity.BaseEntity{

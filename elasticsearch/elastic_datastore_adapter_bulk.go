@@ -56,7 +56,7 @@ func (dbs *ElasticStore) BulkInsert(entities []Entity) (int64, error) {
 					}
 				},
 			}); err != nil {
-				logger.Error(err.Error())
+				logger.Error("%s", err.Error())
 			}
 		}
 	}
@@ -110,7 +110,7 @@ func (dbs *ElasticStore) BulkUpdate(entities []Entity) (int64, error) {
 				OnSuccess:  successFunc,
 				OnFailure:  failureFunc,
 			}); err != nil {
-				logger.Error(err.Error())
+				logger.Error("%s", err.Error())
 			}
 		}
 	}
@@ -164,7 +164,7 @@ func (dbs *ElasticStore) BulkUpsert(entities []Entity) (int64, error) {
 				OnSuccess:  successFunc,
 				OnFailure:  failureFunc,
 			}); err != nil {
-				logger.Error(err.Error())
+				logger.Error("%s", err.Error())
 			}
 		}
 	}
@@ -213,7 +213,7 @@ func (dbs *ElasticStore) BulkDelete(factory EntityFactory, entityIDs []string, k
 			OnSuccess:  successFunc,
 			OnFailure:  failureFunc,
 		}); err != nil {
-			logger.Error(err.Error())
+			logger.Error("%s", err.Error())
 		}
 
 	}
@@ -266,7 +266,7 @@ func (dbs *ElasticStore) BulkSetFields(factory EntityFactory, field string, valu
 			OnSuccess:  successFunc,
 			OnFailure:  failureFunc,
 		}); err != nil {
-			logger.Error(err.Error())
+			logger.Error("%s", err.Error())
 		}
 	}
 

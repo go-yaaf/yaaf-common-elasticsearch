@@ -454,28 +454,28 @@ func (s *elasticDatastoreQuery) addSubAggregation(aggregations *types.Aggregatio
 		subAgg := types.NewAggregations()
 		subAgg.Sum = types.NewSumAggregation()
 		subAgg.Sum.Field = &field
-		aggregations.Aggregations[aggSUM] = *subAgg
+		aggregations.Aggregations[AGG_SUM] = *subAgg
 	}
 	// Add sub aggregation: avg
 	if function == database.AVG {
 		subAgg := types.NewAggregations()
 		subAgg.Avg = types.NewAverageAggregation()
 		subAgg.Avg.Field = &field
-		aggregations.Aggregations[aggAVG] = *subAgg
+		aggregations.Aggregations[AGG_AVG] = *subAgg
 	}
 	// Add sub aggregation: min
 	if function == database.MIN {
 		subAgg := types.NewAggregations()
 		subAgg.Min = types.NewMinAggregation()
 		subAgg.Min.Field = &field
-		aggregations.Aggregations[aggMIN] = *subAgg
+		aggregations.Aggregations[AGG_MIN] = *subAgg
 	}
 	// Add sub aggregation: max
 	if function == database.MAX {
 		subAgg := types.NewAggregations()
 		subAgg.Max = types.NewMaxAggregation()
 		subAgg.Max.Field = &field
-		aggregations.Aggregations[aggMAX] = *subAgg
+		aggregations.Aggregations[AGG_MAX] = *subAgg
 	}
 }
 
